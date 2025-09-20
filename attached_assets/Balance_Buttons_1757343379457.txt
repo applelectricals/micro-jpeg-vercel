@@ -1,0 +1,11 @@
+	Button	Page	Section	Currently redirecting to	Should Redirect to
+2	Try Premium 1$	/compress-free	Hero CTA	Nowhere	/subscribe?plan=test-premium
+4	Test Premium for 1$	/compress-free	Experience Premium Features	Nowhere	/subscribe?plan=test-premium
+6	Keep this Power	/test-premium	Hero CTA	Nowhere	/subscribe?plan=premium
+11	See What You are Missing	/compress-premium	Hero CTA	Nowhere	/simple-pricing
+17	Contact Support	/compress-enterprise	Your Enterprise Plan Usage	Webmail	Contact Page - need to create
+19	Send Feedback	/compress-enterprise	Help Us Improve MicroJPEG		Check if working and saving to Database - sending email to MicroJPEG
+20	Get Test Premium	/compress-free	Output Modal Price Card on trigger	Nowhere	/subscribe?plan=test-premium
+21	Get Premium	/compress-free	Output Modal Price Card on trigger	Nowhere	/subscribe?plan=premium
+22	Get Test Premium	Landing page	Output Modal Price Card on trigger	Nowhere	/subscribe?plan=test-premium
+23	Get Premium	Landing page	Output Modal Price Card on trigger	Nowhere	/subscribe?plan=premium
