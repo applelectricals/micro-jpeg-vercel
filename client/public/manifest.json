@@ -1,0 +1,93 @@
+{
+  "name": "Free JPEG Compression Tool - Micro JPEG",
+  "short_name": "JPEG Compressor",
+  "description": "Best free JPEG compression tool online. Compress JPEG without quality loss up to 90% smaller files. Professional lossless algorithm with real results.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#3B82F6",
+  "orientation": "portrait-primary",
+  "scope": "/",
+  "lang": "en-US",
+  "dir": "ltr",
+  "categories": ["productivity", "photo", "utilities"],
+  "icons": [
+    {
+      "src": "/favicon-16x16.png",
+      "sizes": "16x16",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/favicon-32x32.png", 
+      "sizes": "32x32",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/logo-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/logo-512.png",
+      "sizes": "512x512", 
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "/screenshots/desktop-screenshot.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "JPEG compression tool desktop interface showing before/after results"
+    },
+    {
+      "src": "/screenshots/mobile-screenshot.png", 
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Mobile JPEG compressor interface with touch-friendly controls"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Compress JPEG",
+      "short_name": "Compress",
+      "description": "Start compressing JPEG images immediately",
+      "url": "/#jpeg-compressor",
+      "icons": [
+        {
+          "src": "/shortcuts/compress-icon.png",
+          "sizes": "96x96"
+        }
+      ]
+    },
+    {
+      "name": "View Results", 
+      "short_name": "Results",
+      "description": "See compression examples and results",
+      "url": "/#compression-results",
+      "icons": [
+        {
+          "src": "/shortcuts/results-icon.png",
+          "sizes": "96x96"
+        }
+      ]
+    }
+  ],
+  "related_applications": [],
+  "prefer_related_applications": false,
+  "edge_side_panel": {
+    "preferred_width": 400
+  }
+}
