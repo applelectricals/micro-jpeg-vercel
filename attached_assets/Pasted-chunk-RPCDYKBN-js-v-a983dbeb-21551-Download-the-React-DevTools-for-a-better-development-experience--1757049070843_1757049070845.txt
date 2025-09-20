@@ -1,0 +1,183 @@
+chunk-RPCDYKBN.js?v=a983dbeb:21551 Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+premium-compress.tsx:295 Subscription loading state: true
+premium-compress.tsx:296 Subscription data summary: {isLoading: true, isPremium: false, subscriptionStatus: 'inactive'}
+premium-compress.tsx:303 Component initialized with session results: 0
+premium-compress.tsx:295 Subscription loading state: true
+premium-compress.tsx:296 Subscription data summary: {isLoading: true, isPremium: false, subscriptionStatus: 'inactive'}
+premium-compress.tsx:295 Subscription loading state: true
+premium-compress.tsx:296 Subscription data summary: {isLoading: true, isPremium: false, subscriptionStatus: 'inactive'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+compress-premium:1 Error while trying to use the following icon from the Manifest: https://277e5bf1-9b67-405a-ab94-816a93a86842-00-31384xxtk9d6l.worf.replit.dev/apple-touch-icon.png (Download error or resource isn't a valid image)Understand this error
+premium-compress.tsx:113 trackActivity called - Current results before update: 0
+premium-compress.tsx:93 SessionManager.updateSession - Current results: 0 Updated results: 0
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:636 Before updating session - existing results: 0
+premium-compress.tsx:637 New results to add: 1
+premium-compress.tsx:647 After merging - total results: 1
+premium-compress.tsx:93 SessionManager.updateSession - Current results: 0 Updated results: 1
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:113 trackActivity called - Current results before update: 1
+premium-compress.tsx:93 SessionManager.updateSession - Current results: 1 Updated results: 1
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:636 Before updating session - existing results: 1
+premium-compress.tsx:637 New results to add: 1
+premium-compress.tsx:647 After merging - total results: 2
+premium-compress.tsx:93 SessionManager.updateSession - Current results: 1 Updated results: 2
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:113 trackActivity called - Current results before update: 2
+premium-compress.tsx:93 SessionManager.updateSession - Current results: 2 Updated results: 2
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:636 Before updating session - existing results: 2
+premium-compress.tsx:637 New results to add: 1
+premium-compress.tsx:647 After merging - total results: 3
+premium-compress.tsx:93 SessionManager.updateSession - Current results: 2 Updated results: 3
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:113 trackActivity called - Current results before update: 3
+premium-compress.tsx:93 SessionManager.updateSession - Current results: 3 Updated results: 3
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:636 Before updating session - existing results: 3
+premium-compress.tsx:637 New results to add: 1
+premium-compress.tsx:647 After merging - total results: 4
+premium-compress.tsx:93 SessionManager.updateSession - Current results: 3 Updated results: 4
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:800 processSpecificFormat - Before updating session - existing results: 4
+premium-compress.tsx:801 processSpecificFormat - New results to add: 4
+premium-compress.tsx:93 SessionManager.updateSession - Current results: 4 Updated results: 8
+premium-compress.tsx:810 processSpecificFormat - After merging - total results: 8
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:800 processSpecificFormat - Before updating session - existing results: 8
+premium-compress.tsx:801 processSpecificFormat - New results to add: 4
+premium-compress.tsx:93 SessionManager.updateSession - Current results: 8 Updated results: 12
+premium-compress.tsx:810 processSpecificFormat - After merging - total results: 12
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:800 processSpecificFormat - Before updating session - existing results: 12
+premium-compress.tsx:801 processSpecificFormat - New results to add: 4
+premium-compress.tsx:93 SessionManager.updateSession - Current results: 12 Updated results: 16
+premium-compress.tsx:810 processSpecificFormat - After merging - total results: 16
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:800 processSpecificFormat - Before updating session - existing results: 16
+premium-compress.tsx:801 processSpecificFormat - New results to add: 4
+premium-compress.tsx:93 SessionManager.updateSession - Current results: 16 Updated results: 20
+premium-compress.tsx:810 processSpecificFormat - After merging - total results: 20
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:113 trackActivity called - Current results before update: 20
+premium-compress.tsx:93 SessionManager.updateSession - Current results: 20 Updated results: 20
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:636 Before updating session - existing results: 20
+premium-compress.tsx:637 New results to add: 1
+premium-compress.tsx:647 After merging - total results: 21
+premium-compress.tsx:93 SessionManager.updateSession - Current results: 20 Updated results: 21
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:295 Subscription loading state: false
+premium-compress.tsx:296 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
