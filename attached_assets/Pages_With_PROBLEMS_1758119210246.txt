@@ -1,0 +1,7 @@
+Page	Thumbnail	Image Download	Image Download Icon	Download All	Ad banner	Price Card
+/convert/cr2-to-jpg	X	X	Missing	Failed (404)	OK	X
+/convert/cr2-to-png	OK	OK	Missing	OK	OK	OK (Extra Pop up not required)
+/convert/cr2-to-tiff	X	OK	Missing	OK	OK	OK (Extra Pop up not required)
+/convert/cr2-to-webp	OK	OK	Missing	OK	OK	OK (Extra Pop up not required)
+/convert/cr2-to-avif	OK	OK	Missing	OK	OK	OK (Extra Pop up not required)
+/convert/cr2-to-svg	X	X	Missing	Failed (404)	OK	X
