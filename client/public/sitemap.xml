@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<urlset xmlns="http://www.sitemaps.org/schemas/sitemap/0.9"
+        xmlns:image="http://www.google.com/schemas/sitemap-image/1.1"
+        xmlns:video="http://www.google.com/schemas/sitemap-video/1.1">
+  <!-- Homepage with image optimization content -->
+  <url>
+    <loc>https://micro-jpeg.replit.app/</loc>
+    <lastmod>2025-01-10</lastmod>
+    <changefreq>daily</changefreq>
+    <priority>1.0</priority>
+    
+    <!-- Image sitemap entries for SEO -->
+    <image:image>
+      <image:loc>https://micro-jpeg.replit.app/images/seo-assets/before-after-compression.svg</image:loc>
+      <image:title>JPEG Compression Before and After Results - 88% File Size Reduction</image:title>
+      <image:caption>Professional JPEG compression example showing 3.2MB portrait reduced to 384KB with perfect quality preservation using best lossless compression algorithm</image:caption>
+    </image:image>
+    
+    <image:image>
+      <image:loc>https://micro-jpeg.replit.app/images/seo-assets/compression-process.svg</image:loc>
+      <image:title>4-Step JPEG Compression Process - How to Compress JPEG Without Quality Loss</image:title>
+      <image:caption>Step-by-step guide showing how to compress JPEG files online: Upload, Analyze, Compress, Download with professional optimization controls</image:caption>
+    </image:image>
+    
+    <image:image>
+      <image:loc>https://micro-jpeg.replit.app/images/seo-assets/quality-chart.svg</image:loc>
+      <image:title>JPEG Compression Quality vs File Size Chart - Optimal Compression Settings</image:title>
+      <image:caption>Professional chart showing optimal JPEG compression quality settings for best file size reduction while maintaining image quality</image:caption>
+    </image:image>
+    
+    <image:image>
+      <image:loc>https://micro-jpeg.replit.app/images/seo-assets/jpeg-vs-competitors.svg</image:loc>
+      <image:title>JPEG Compression Tools Comparison - TinyPNG Alternative Analysis</image:title>
+      <image:caption>Comprehensive comparison of free JPEG compression tools showing advantages of our lossless compressor vs TinyPNG and other alternatives</image:caption>
+    </image:image>
+    
+    <!-- Video sitemap entry -->
+    <video:video>
+      <video:thumbnail_loc>https://micro-jpeg.replit.app/images/video-thumbnail-compression-demo.jpg</video:thumbnail_loc>
+      <video:title>Professional JPEG Compression Demo - Before vs After Results</video:title>
+      <video:description>Interactive demonstration showing 4-step JPEG compression process with real user images. See how our lossless algorithm compresses portraits from 3.2MB to 384KB and landscapes from 5.8MB to 642KB with perfect quality preservation.</video:description>
+      <video:content_loc>https://micro-jpeg.replit.app/videos/compression-demo.mp4</video:content_loc>
+      <video:duration>16</video:duration>
+      <video:view_count>12500</video:view_count>
+      <video:publication_date>2025-01-10</video:publication_date>
+      <video:tag>JPEG compression</video:tag>
+      <video:tag>image optimization</video:tag>
+      <video:tag>lossless compression</video:tag>
+      <video:tag>TinyPNG alternative</video:tag>
+      <video:category>Technology</video:category>
+    </video:video>
+  </url>
+  
+  <!-- JPEG Compression Tool Section -->
+  <url>
+    <loc>https://micro-jpeg.replit.app/#jpeg-compressor</loc>
+    <lastmod>2025-01-10</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.9</priority>
+  </url>
+  
+  <!-- How to Compress JPEG Section -->
+  <url>
+    <loc>https://micro-jpeg.replit.app/#how-to-compress-jpeg</loc>
+    <lastmod>2025-01-10</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  
+  <!-- Compression Results Section -->
+  <url>
+    <loc>https://micro-jpeg.replit.app/#compression-results</loc>
+    <lastmod>2025-01-10</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.8</priority>
+  </url>
+  
+  <!-- FAQ Section -->
+  <url>
+    <loc>https://micro-jpeg.replit.app/#faq</loc>
+    <lastmod>2025-01-10</lastmod>
+    <changefreq>weekly</changefreq>
+    <priority>0.7</priority>
+  </url>
+  
+  <!-- Features Section -->
+  <url>
+    <loc>https://micro-jpeg.replit.app/#features</loc>
+    <lastmod>2025-01-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+  
+  <!-- Comparison Section -->
+  <url>
+    <loc>https://micro-jpeg.replit.app/#comparison</loc>
+    <lastmod>2025-01-10</lastmod>
+    <changefreq>monthly</changefreq>
+    <priority>0.6</priority>
+  </url>
+</urlset>
