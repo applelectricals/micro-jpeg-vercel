@@ -1,0 +1,190 @@
+Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+premium-compress.tsx:292 Subscription hook data: {
+  "isLoading": true,
+  "isPremium": false,
+  "subscriptionStatus": "inactive"
+}
+premium-compress.tsx:293 User data: {
+  "isAuthenticated": false
+}
+premium-compress.tsx:292 Subscription hook data: {
+  "isLoading": true,
+  "isPremium": false,
+  "subscriptionStatus": "inactive"
+}
+premium-compress.tsx:293 User data: {
+  "isAuthenticated": false
+}
+premium-compress.tsx:292 Subscription hook data: {
+  "subscriptionInfo": {
+    "isPremium": true,
+    "subscriptionStatus": "active",
+    "subscriptionPlan": "free",
+    "subscriptionEndDate": "2025-09-29T04:03:06.188Z",
+    "stripeCustomerId": "cus_SwcN02AivxrSrS",
+    "stripeSubscriptionId": null
+  },
+  "isLoading": false,
+  "isPremium": true,
+  "subscriptionStatus": "active"
+}
+premium-compress.tsx:293 User data: {
+  "user": {
+    "id": "f4e6a87f-db49-4daa-82a4-123c6392969a",
+    "email": "master@microjpeg.com",
+    "firstName": "Master",
+    "lastName": "Test",
+    "profileImageUrl": null,
+    "isEmailVerified": "true",
+    "emailVerificationToken": null,
+    "emailVerificationExpires": null,
+    "stripeCustomerId": "cus_SwcN02AivxrSrS",
+    "stripeSubscriptionId": null,
+    "subscriptionTier": "pro",
+    "subscriptionStatus": "active",
+    "subscriptionEndDate": "2025-09-29T04:03:06.188Z",
+    "monthlyOperations": 0,
+    "dailyOperations": 0,
+    "hourlyOperations": 0,
+    "lastOperationAt": null,
+    "bytesProcessed": 0,
+    "isPremium": true,
+    "purchasedCredits": 0,
+    "totalCreditsUsed": 0,
+    "accountStatus": "active",
+    "suspendedAt": null,
+    "suspensionReason": null,
+    "lastLogin": "2025-09-04T16:27:05.079Z",
+    "createdAt": "2025-08-27T13:02:39.055Z",
+    "updatedAt": "2025-09-04T16:29:10.749Z"
+  },
+  "isAuthenticated": true
+}
+premium-compress.tsx:292 Subscription hook data: {
+  "subscriptionInfo": {
+    "isPremium": true,
+    "subscriptionStatus": "active",
+    "subscriptionPlan": "free",
+    "subscriptionEndDate": "2025-09-29T04:03:06.188Z",
+    "stripeCustomerId": "cus_SwcN02AivxrSrS",
+    "stripeSubscriptionId": null
+  },
+  "isLoading": false,
+  "isPremium": true,
+  "subscriptionStatus": "active"
+}
+premium-compress.tsx:293 User data: {
+  "user": {
+    "id": "f4e6a87f-db49-4daa-82a4-123c6392969a",
+    "email": "master@microjpeg.com",
+    "firstName": "Master",
+    "lastName": "Test",
+    "profileImageUrl": null,
+    "isEmailVerified": "true",
+    "emailVerificationToken": null,
+    "emailVerificationExpires": null,
+    "stripeCustomerId": "cus_SwcN02AivxrSrS",
+    "stripeSubscriptionId": null,
+    "subscriptionTier": "pro",
+    "subscriptionStatus": "active",
+    "subscriptionEndDate": "2025-09-29T04:03:06.188Z",
+    "monthlyOperations": 0,
+    "dailyOperations": 0,
+    "hourlyOperations": 0,
+    "lastOperationAt": null,
+    "bytesProcessed": 0,
+    "isPremium": true,
+    "purchasedCredits": 0,
+    "totalCreditsUsed": 0,
+    "accountStatus": "active",
+    "suspendedAt": null,
+    "suspensionReason": null,
+    "lastLogin": "2025-09-04T16:27:05.079Z",
+    "createdAt": "2025-08-27T13:02:39.055Z",
+    "updatedAt": "2025-09-04T16:29:10.749Z"
+  },
+  "isAuthenticated": true
+}
+queryClient.ts:34  GET https://277e5bf1-9b67-405a-ab94-816a93a86842-00-31384xxtk9d6l.worf.replit.dev/api/usage-stats 500 (Internal Server Error)
+(anonymous) @ queryClient.ts:34
+fetchFn @ @tanstack_react-query.js?v=a983dbeb:840
+run @ @tanstack_react-query.js?v=a983dbeb:494
+start @ @tanstack_react-query.js?v=a983dbeb:536
+fetch @ @tanstack_react-query.js?v=a983dbeb:926
+executeFetch_fn @ @tanstack_react-query.js?v=a983dbeb:2211
+onSubscribe @ @tanstack_react-query.js?v=a983dbeb:1898
+subscribe @ @tanstack_react-query.js?v=a983dbeb:24
+(anonymous) @ @tanstack_react-query.js?v=a983dbeb:3022
+subscribeToStore @ chunk-RPCDYKBN.js?v=a983dbeb:11984
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=a983dbeb:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=a983dbeb:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=a983dbeb:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=a983dbeb:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=a983dbeb:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=a983dbeb:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=a983dbeb:19447
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=a983dbeb:18868
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=a983dbeb:9119
+commitRootImpl @ chunk-RPCDYKBN.js?v=a983dbeb:19432
+commitRoot @ chunk-RPCDYKBN.js?v=a983dbeb:19277
+finishConcurrentRender @ chunk-RPCDYKBN.js?v=a983dbeb:18805
+performConcurrentWorkOnRoot @ chunk-RPCDYKBN.js?v=a983dbeb:18718
+workLoop @ chunk-RPCDYKBN.js?v=a983dbeb:197
+flushWork @ chunk-RPCDYKBN.js?v=a983dbeb:176
+performWorkUntilDeadline @ chunk-RPCDYKBN.js?v=a983dbeb:384Understand this error
+compress-premium:1 Error while trying to use the following icon from the Manifest: https://277e5bf1-9b67-405a-ab94-816a93a86842-00-31384xxtk9d6l.worf.replit.dev/apple-touch-icon.png (Download error or resource isn't a valid image)Understand this error
+premium-compress.tsx:834 File validation debug: {
+  "fileName": "01.CR2",
+  "fileSize": 22868328,
+  "fileSizeMB": 22,
+  "isPremium": false,
+  "subscriptionStatus": "inactive",
+  "isPremiumType": "boolean",
+  "subscriptionStatusType": "string"
+}
+premium-compress.tsx:847 Validation error: 01.CR2: File too large. Maximum size is 10MB. Upgrade to Premium for files up to 50MB.
+premium-compress.tsx:292 Subscription hook data: {
+  "subscriptionInfo": {
+    "isPremium": true,
+    "subscriptionStatus": "active",
+    "subscriptionPlan": "free",
+    "subscriptionEndDate": "2025-09-29T04:03:06.188Z",
+    "stripeCustomerId": "cus_SwcN02AivxrSrS",
+    "stripeSubscriptionId": null
+  },
+  "isLoading": false,
+  "isPremium": true,
+  "subscriptionStatus": "active"
+}
+premium-compress.tsx:293 User data: {
+  "user": {
+    "id": "f4e6a87f-db49-4daa-82a4-123c6392969a",
+    "email": "master@microjpeg.com",
+    "firstName": "Master",
+    "lastName": "Test",
+    "profileImageUrl": null,
+    "isEmailVerified": "true",
+    "emailVerificationToken": null,
+    "emailVerificationExpires": null,
+    "stripeCustomerId": "cus_SwcN02AivxrSrS",
+    "stripeSubscriptionId": null,
+    "subscriptionTier": "pro",
+    "subscriptionStatus": "active",
+    "subscriptionEndDate": "2025-09-29T04:03:06.188Z",
+    "monthlyOperations": 0,
+    "dailyOperations": 0,
+    "hourlyOperations": 0,
+    "lastOperationAt": null,
+    "bytesProcessed": 0,
+    "isPremium": true,
+    "purchasedCredits": 0,
+    "totalCreditsUsed": 0,
+    "accountStatus": "active",
+    "suspendedAt": null,
+    "suspensionReason": null,
+    "lastLogin": "2025-09-04T16:27:05.079Z",
+    "createdAt": "2025-08-27T13:02:39.055Z",
+    "updatedAt": "2025-09-04T16:29:10.749Z"
+  },
+  "isAuthenticated": true
+}
