@@ -1,0 +1,156 @@
+Download the React DevTools for a better development experience: https://reactjs.org/link/react-devtools
+queryClient.ts:34  GET https://277e5bf1-9b67-405a-ab94-816a93a86842-00-31384xxtk9d6l.worf.replit.dev/api/auth/user 401 (Unauthorized)
+(anonymous) @ queryClient.ts:34
+fetchFn @ @tanstack_react-query.js?v=cd5acc46:840
+run @ @tanstack_react-query.js?v=cd5acc46:494
+start @ @tanstack_react-query.js?v=cd5acc46:536
+fetch @ @tanstack_react-query.js?v=cd5acc46:926
+executeFetch_fn @ @tanstack_react-query.js?v=cd5acc46:2211
+onSubscribe @ @tanstack_react-query.js?v=cd5acc46:1898
+subscribe @ @tanstack_react-query.js?v=cd5acc46:24
+(anonymous) @ @tanstack_react-query.js?v=cd5acc46:3022
+subscribeToStore @ chunk-RPCDYKBN.js?v=cd5acc46:11984
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=cd5acc46:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=cd5acc46:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=cd5acc46:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=cd5acc46:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=cd5acc46:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=cd5acc46:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=cd5acc46:19447
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=cd5acc46:18868
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=cd5acc46:9119
+commitRootImpl @ chunk-RPCDYKBN.js?v=cd5acc46:19432
+commitRoot @ chunk-RPCDYKBN.js?v=cd5acc46:19277
+finishConcurrentRender @ chunk-RPCDYKBN.js?v=cd5acc46:18783
+performConcurrentWorkOnRoot @ chunk-RPCDYKBN.js?v=cd5acc46:18718
+workLoop @ chunk-RPCDYKBN.js?v=cd5acc46:197
+flushWork @ chunk-RPCDYKBN.js?v=cd5acc46:176
+performWorkUntilDeadline @ chunk-RPCDYKBN.js?v=cd5acc46:384Understand this error
+8The resource <URL> was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.Understand this warning
+convert-cr2-to-jpg.tsx:193 SessionManager.getSession() returning: 0 results
+performance.ts:9 [Performance] TTFB: 1363ms
+convert-cr2-to-jpg.tsx:193 SessionManager.getSession() returning: 0 results
+convert-cr2-to-jpg.tsx:870 Auto-process effect triggered: {newlyAddedFilesLength: 0, isProcessing: false, selectedFormatsLength: 1, selectedFormats: Array(1)}
+convert-cr2-to-jpg.tsx:888 Auto-process conditions not met: {hasNewFiles: false, notProcessing: true, hasFormats: true}
+convert-cr2-to-jpg.tsx:870 Auto-process effect triggered: {newlyAddedFilesLength: 0, isProcessing: false, selectedFormatsLength: 1, selectedFormats: Array(1)}
+convert-cr2-to-jpg.tsx:888 Auto-process conditions not met: {hasNewFiles: false, notProcessing: true, hasFormats: true}
+queryClient.ts:34  GET https://277e5bf1-9b67-405a-ab94-816a93a86842-00-31384xxtk9d6l.worf.replit.dev/api/subscription-info 401 (Unauthorized)
+(anonymous) @ queryClient.ts:34
+fetchFn @ @tanstack_react-query.js?v=cd5acc46:840
+run @ @tanstack_react-query.js?v=cd5acc46:494
+start @ @tanstack_react-query.js?v=cd5acc46:536
+fetch @ @tanstack_react-query.js?v=cd5acc46:926
+executeFetch_fn @ @tanstack_react-query.js?v=cd5acc46:2211
+onSubscribe @ @tanstack_react-query.js?v=cd5acc46:1898
+subscribe @ @tanstack_react-query.js?v=cd5acc46:24
+(anonymous) @ @tanstack_react-query.js?v=cd5acc46:3022
+subscribeToStore @ chunk-RPCDYKBN.js?v=cd5acc46:11984
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=cd5acc46:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=cd5acc46:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=cd5acc46:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=cd5acc46:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=cd5acc46:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=cd5acc46:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=cd5acc46:19447
+(anonymous) @ chunk-RPCDYKBN.js?v=cd5acc46:19328
+workLoop @ chunk-RPCDYKBN.js?v=cd5acc46:197
+flushWork @ chunk-RPCDYKBN.js?v=cd5acc46:176
+performWorkUntilDeadline @ chunk-RPCDYKBN.js?v=cd5acc46:384Understand this error
+queryClient.ts:34  GET https://277e5bf1-9b67-405a-ab94-816a93a86842-00-31384xxtk9d6l.worf.replit.dev/api/auth/user 401 (Unauthorized)
+(anonymous) @ queryClient.ts:34
+fetchFn @ @tanstack_react-query.js?v=cd5acc46:840
+run @ @tanstack_react-query.js?v=cd5acc46:494
+start @ @tanstack_react-query.js?v=cd5acc46:536
+fetch @ @tanstack_react-query.js?v=cd5acc46:926
+executeFetch_fn @ @tanstack_react-query.js?v=cd5acc46:2211
+onSubscribe @ @tanstack_react-query.js?v=cd5acc46:1898
+subscribe @ @tanstack_react-query.js?v=cd5acc46:24
+(anonymous) @ @tanstack_react-query.js?v=cd5acc46:3022
+subscribeToStore @ chunk-RPCDYKBN.js?v=cd5acc46:11984
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=cd5acc46:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=cd5acc46:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=cd5acc46:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=cd5acc46:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=cd5acc46:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=cd5acc46:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=cd5acc46:19447
+(anonymous) @ chunk-RPCDYKBN.js?v=cd5acc46:19328
+workLoop @ chunk-RPCDYKBN.js?v=cd5acc46:197
+flushWork @ chunk-RPCDYKBN.js?v=cd5acc46:176
+performWorkUntilDeadline @ chunk-RPCDYKBN.js?v=cd5acc46:384Understand this error
+performance.ts:32 [Performance] LCP: 17512ms
+convert-cr2-to-jpg.tsx:1191 File validation debug: {
+  "fileName": "06.CR2",
+  "fileSize": 21170171,
+  "fileSizeMB": 20,
+  "fileType": "image/CR2",
+  "isPremium": false,
+  "subscriptionStatus": "inactive",
+  "isPremiumType": "boolean",
+  "subscriptionStatusType": "string"
+}
+convert-cr2-to-jpg.tsx:1208 ✅ File validation passed for: 06.CR2
+convert-cr2-to-jpg.tsx:193 SessionManager.getSession() returning: 0 results
+convert-cr2-to-jpg.tsx:193 SessionManager.getSession() returning: 0 results
+convert-cr2-to-jpg.tsx:870 Auto-process effect triggered: {newlyAddedFilesLength: 1, isProcessing: false, selectedFormatsLength: 1, selectedFormats: Array(1)}
+convert-cr2-to-jpg.tsx:878 All conditions met - starting auto-processing in 200ms
+convert-cr2-to-jpg.tsx:882 Timer fired - calling startProcessing()
+convert-cr2-to-jpg.tsx:762 Starting compression request...
+convert-cr2-to-jpg.tsx:763 Files to process: [{…}]
+convert-cr2-to-jpg.tsx:764 Page source: cr2-converter
+convert-cr2-to-jpg.tsx:765 Settings: {quality: 85, outputFormat: Array(1), resizeOption: 'keep-original', resizePercentage: 100, compressionAlgorithm: 'standard', …}
+convert-cr2-to-jpg.tsx:774 Making fetch request to /api/compress...
+convert-cr2-to-jpg.tsx:870 Auto-process effect triggered: {newlyAddedFilesLength: 1, isProcessing: true, selectedFormatsLength: 1, selectedFormats: Array(1)}
+convert-cr2-to-jpg.tsx:888 Auto-process conditions not met: {hasNewFiles: true, notProcessing: false, hasFormats: true}
+convert-cr2-to-jpg.tsx:775  POST https://277e5bf1-9b67-405a-ab94-816a93a86842-00-31384xxtk9d6l.worf.replit.dev/api/compress 400 (Bad Request)
+(anonymous) @ convert-cr2-to-jpg.tsx:775
+(anonymous) @ convert-cr2-to-jpg.tsx:883
+setTimeout
+(anonymous) @ convert-cr2-to-jpg.tsx:881
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=cd5acc46:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=cd5acc46:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=cd5acc46:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=cd5acc46:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=cd5acc46:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=cd5acc46:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=cd5acc46:19447
+commitRootImpl @ chunk-RPCDYKBN.js?v=cd5acc46:19416
+commitRoot @ chunk-RPCDYKBN.js?v=cd5acc46:19277
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=cd5acc46:18895
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=cd5acc46:9119
+flushSync @ chunk-RPCDYKBN.js?v=cd5acc46:18959
+finishEventHandler @ chunk-RPCDYKBN.js?v=cd5acc46:3569
+batchedUpdates @ chunk-RPCDYKBN.js?v=cd5acc46:3582
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=cd5acc46:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=cd5acc46:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=cd5acc46:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=cd5acc46:5449Understand this error
+convert-cr2-to-jpg.tsx:781 Received response: 400 Bad Request
+convert-cr2-to-jpg.tsx:785 Response not OK: 400 Bad Request
+convert-cr2-to-jpg.tsx:846 Compression error: Error: HTTP error! status: 400
+    at convert-cr2-to-jpg.tsx:786:17
+(anonymous) @ convert-cr2-to-jpg.tsx:846
+await in (anonymous)
+(anonymous) @ convert-cr2-to-jpg.tsx:883
+setTimeout
+(anonymous) @ convert-cr2-to-jpg.tsx:881
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=cd5acc46:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=cd5acc46:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=cd5acc46:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=cd5acc46:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=cd5acc46:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=cd5acc46:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=cd5acc46:19447
+commitRootImpl @ chunk-RPCDYKBN.js?v=cd5acc46:19416
+commitRoot @ chunk-RPCDYKBN.js?v=cd5acc46:19277
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=cd5acc46:18895
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=cd5acc46:9119
+flushSync @ chunk-RPCDYKBN.js?v=cd5acc46:18959
+finishEventHandler @ chunk-RPCDYKBN.js?v=cd5acc46:3569
+batchedUpdates @ chunk-RPCDYKBN.js?v=cd5acc46:3582
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=cd5acc46:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=cd5acc46:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=cd5acc46:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=cd5acc46:5449Understand this error
+convert-cr2-to-jpg.tsx:870 Auto-process effect triggered: {newlyAddedFilesLength: 0, isProcessing: false, selectedFormatsLength: 1, selectedFormats: Array(1)}
+convert-cr2-to-jpg.tsx:888 Auto-process conditions not met: {hasNewFiles: false, notProcessing: true, hasFormats: true}
