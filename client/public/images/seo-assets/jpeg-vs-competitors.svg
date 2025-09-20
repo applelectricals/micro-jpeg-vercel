@@ -1,0 +1,75 @@
+<svg viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg">
+  <!-- Title -->
+  <text x="400" y="30" text-anchor="middle" font-family="Inter, sans-serif" font-size="20" font-weight="600" fill="#1f2937">JPEG Compression Tools Comparison</text>
+  <text x="400" y="50" text-anchor="middle" font-family="Inter, sans-serif" font-size="14" fill="#6b7280">Why choose our free JPEG compressor over alternatives</text>
+  
+  <!-- Our Tool (Winner) -->
+  <g transform="translate(50, 80)">
+    <rect x="0" y="0" width="200" height="350" fill="#dcfce7" stroke="#16a34a" stroke-width="3" rx="12"/>
+    <rect x="10" y="10" width="180" height="50" fill="#16a34a" rx="8"/>
+    <text x="100" y="30" text-anchor="middle" font-family="Inter, sans-serif" font-size="14" font-weight="600" fill="white">Our JPEG Compressor</text>
+    <text x="100" y="45" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" fill="white">★★★★★ Best Choice</text>
+    
+    <!-- Features -->
+    <text x="20" y="85" font-family="Inter, sans-serif" font-size="14" font-weight="600" fill="#16a34a">✓ Features:</text>
+    <text x="20" y="105" font-family="Inter, sans-serif" font-size="12" fill="#374151">• 100% Free Forever</text>
+    <text x="20" y="125" font-family="Inter, sans-serif" font-size="12" fill="#374151">• Lossless Compression</text>
+    <text x="20" y="145" font-family="Inter, sans-serif" font-size="12" fill="#374151">• Batch Processing</text>
+    <text x="20" y="165" font-family="Inter, sans-serif" font-size="12" fill="#374151">• No File Size Limits</text>
+    <text x="20" y="185" font-family="Inter, sans-serif" font-size="12" fill="#374151">• Advanced Quality Controls</text>
+    <text x="20" y="205" font-family="Inter, sans-serif" font-size="12" fill="#374151">• Real-time Comparison</text>
+    <text x="20" y="225" font-family="Inter, sans-serif" font-size="12" fill="#374151">• ZIP Downloads</text>
+    <text x="20" y="245" font-family="Inter, sans-serif" font-size="12" fill="#374151">• No Watermarks</text>
+    <text x="20" y="265" font-family="Inter, sans-serif" font-size="12" fill="#374151">• Mobile Optimized</text>
+    
+    <!-- Performance Score -->
+    <rect x="20" y="290" width="160" height="40" fill="#16a34a" rx="8"/>
+    <text x="100" y="305" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" font-weight="600" fill="white">Performance Score</text>
+    <text x="100" y="320" text-anchor="middle" font-family="Inter, sans-serif" font-size="16" font-weight="700" fill="white">95/100</text>
+  </g>
+
+  <!-- TinyPNG -->
+  <g transform="translate(300, 80)">
+    <rect x="0" y="0" width="200" height="350" fill="#fef3c7" stroke="#f59e0b" stroke-width="2" rx="12"/>
+    <rect x="10" y="10" width="180" height="40" fill="#f59e0b" rx="8"/>
+    <text x="100" y="35" text-anchor="middle" font-family="Inter, sans-serif" font-size="14" font-weight="600" fill="white">TinyPNG</text>
+    
+    <text x="20" y="75" font-family="Inter, sans-serif" font-size="14" font-weight="600" fill="#f59e0b">Features:</text>
+    <text x="20" y="95" font-family="Inter, sans-serif" font-size="12" fill="#374151">• Limited free uploads</text>
+    <text x="20" y="115" font-family="Inter, sans-serif" font-size="12" fill="#374151">• Good compression</text>
+    <text x="20" y="135" font-family="Inter, sans-serif" font-size="12" fill="#374151">• API available (paid)</text>
+    <text x="20" y="155" font-family="Inter, sans-serif" font-size="12" fill="#ef4444">✗ File size restrictions</text>
+    <text x="20" y="175" font-family="Inter, sans-serif" font-size="12" fill="#ef4444">✗ Limited quality control</text>
+    <text x="20" y="195" font-family="Inter, sans-serif" font-size="12" fill="#ef4444">✗ No comparison view</text>
+    <text x="20" y="215" font-family="Inter, sans-serif" font-size="12" fill="#ef4444">✗ Paid for bulk use</text>
+    
+    <rect x="20" y="290" width="160" height="40" fill="#f59e0b" rx="8"/>
+    <text x="100" y="305" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" font-weight="600" fill="white">Performance Score</text>
+    <text x="100" y="320" text-anchor="middle" font-family="Inter, sans-serif" font-size="16" font-weight="700" fill="white">75/100</text>
+  </g>
+
+  <!-- Other Compressors -->
+  <g transform="translate(550, 80)">
+    <rect x="0" y="0" width="200" height="350" fill="#fee2e2" stroke="#ef4444" stroke-width="2" rx="12"/>
+    <rect x="10" y="10" width="180" height="40" fill="#ef4444" rx="8"/>
+    <text x="100" y="35" text-anchor="middle" font-family="Inter, sans-serif" font-size="14" font-weight="600" fill="white">Other Tools</text>
+    
+    <text x="20" y="75" font-family="Inter, sans-serif" font-size="14" font-weight="600" fill="#ef4444">Limitations:</text>
+    <text x="20" y="95" font-family="Inter, sans-serif" font-size="12" fill="#374151">• Watermarks on images</text>
+    <text x="20" y="115" font-family="Inter, sans-serif" font-size="12" fill="#374151">• Slow processing</text>
+    <text x="20" y="135" font-family="Inter, sans-serif" font-size="12" fill="#ef4444">✗ Poor quality results</text>
+    <text x="20" y="155" font-family="Inter, sans-serif" font-size="12" fill="#ef4444">✗ No batch processing</text>
+    <text x="20" y="175" font-family="Inter, sans-serif" font-size="12" fill="#ef4444">✗ Limited file formats</text>
+    <text x="20" y="195" font-family="Inter, sans-serif" font-size="12" fill="#ef4444">✗ Ads everywhere</text>
+    <text x="20" y="215" font-family="Inter, sans-serif" font-size="12" fill="#ef4444">✗ Security concerns</text>
+    
+    <rect x="20" y="290" width="160" height="40" fill="#ef4444" rx="8"/>
+    <text x="100" y="305" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" font-weight="600" fill="white">Performance Score</text>
+    <text x="100" y="320" text-anchor="middle" font-family="Inter, sans-serif" font-size="16" font-weight="700" fill="white">45/100</text>
+  </g>
+  
+  <!-- Bottom conclusion -->
+  <rect x="150" y="450" width="500" height="40" fill="#1f2937" rx="8"/>
+  <text x="400" y="465" text-anchor="middle" font-family="Inter, sans-serif" font-size="14" font-weight="600" fill="white">Winner: Our Free JPEG Compressor</text>
+  <text x="400" y="480" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" fill="white">The clear choice for professional JPEG compression without limitations</text>
+</svg>
