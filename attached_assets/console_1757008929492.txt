@@ -1,0 +1,193 @@
+Failed to load resource: the server responded with a status of 500 (Internal Server Error)Understand this error
+premium-compress.tsx:292 Subscription hook data: {
+  "subscriptionInfo": {
+    "isPremium": true,
+    "subscriptionStatus": "active",
+    "subscriptionPlan": "free",
+    "subscriptionEndDate": "2025-09-29T04:03:06.188Z",
+    "stripeCustomerId": "cus_SwcN02AivxrSrS",
+    "stripeSubscriptionId": null
+  },
+  "isLoading": false,
+  "isPremium": true,
+  "subscriptionStatus": "active"
+}
+premium-compress.tsx:293 User data: {
+  "user": {
+    "id": "f4e6a87f-db49-4daa-82a4-123c6392969a",
+    "email": "master@microjpeg.com",
+    "firstName": "Master",
+    "lastName": "Test",
+    "profileImageUrl": null,
+    "isEmailVerified": "true",
+    "emailVerificationToken": null,
+    "emailVerificationExpires": null,
+    "stripeCustomerId": "cus_SwcN02AivxrSrS",
+    "stripeSubscriptionId": null,
+    "subscriptionTier": "pro",
+    "subscriptionStatus": "active",
+    "subscriptionEndDate": "2025-09-29T04:03:06.188Z",
+    "monthlyOperations": 0,
+    "dailyOperations": 0,
+    "hourlyOperations": 0,
+    "lastOperationAt": null,
+    "bytesProcessed": 0,
+    "isPremium": true,
+    "purchasedCredits": 0,
+    "totalCreditsUsed": 0,
+    "accountStatus": "active",
+    "suspendedAt": null,
+    "suspensionReason": null,
+    "lastLogin": "2025-09-04T16:27:05.079Z",
+    "createdAt": "2025-08-27T13:02:39.055Z",
+    "updatedAt": "2025-09-04T16:29:10.749Z"
+  },
+  "isAuthenticated": true
+}
+premium-compress.tsx:292 Subscription hook data: {
+  "subscriptionInfo": {
+    "isPremium": true,
+    "subscriptionStatus": "active",
+    "subscriptionPlan": "free",
+    "subscriptionEndDate": "2025-09-29T04:03:06.188Z",
+    "stripeCustomerId": "cus_SwcN02AivxrSrS",
+    "stripeSubscriptionId": null
+  },
+  "isLoading": false,
+  "isPremium": true,
+  "subscriptionStatus": "active"
+}
+premium-compress.tsx:293 User data: {
+  "user": {
+    "id": "f4e6a87f-db49-4daa-82a4-123c6392969a",
+    "email": "master@microjpeg.com",
+    "firstName": "Master",
+    "lastName": "Test",
+    "profileImageUrl": null,
+    "isEmailVerified": "true",
+    "emailVerificationToken": null,
+    "emailVerificationExpires": null,
+    "stripeCustomerId": "cus_SwcN02AivxrSrS",
+    "stripeSubscriptionId": null,
+    "subscriptionTier": "pro",
+    "subscriptionStatus": "active",
+    "subscriptionEndDate": "2025-09-29T04:03:06.188Z",
+    "monthlyOperations": 0,
+    "dailyOperations": 0,
+    "hourlyOperations": 0,
+    "lastOperationAt": null,
+    "bytesProcessed": 0,
+    "isPremium": true,
+    "purchasedCredits": 0,
+    "totalCreditsUsed": 0,
+    "accountStatus": "active",
+    "suspendedAt": null,
+    "suspensionReason": null,
+    "lastLogin": "2025-09-04T16:27:05.079Z",
+    "createdAt": "2025-08-27T13:02:39.055Z",
+    "updatedAt": "2025-09-04T16:29:10.749Z"
+  },
+  "isAuthenticated": true
+}
+compress-premium:1 Error while trying to use the following icon from the Manifest: https://277e5bf1-9b67-405a-ab94-816a93a86842-00-31384xxtk9d6l.worf.replit.dev/apple-touch-icon.png (Download error or resource isn't a valid image)Understand this error
+premium-compress.tsx:829 File validation debug: {
+  "fileName": "01.CR2",
+  "fileSize": 22868328,
+  "fileSizeMB": 22,
+  "hasUser": false,
+  "isPremium": false,
+  "subscriptionStatus": "inactive",
+  "isPremiumType": "boolean",
+  "subscriptionStatusType": "string"
+}
+premium-compress.tsx:843 Validation error: 01.CR2: File too large. Maximum size is 10MB. Upgrade to Premium for files up to 50MB.
+premium-compress.tsx:292 Subscription hook data: {
+  "subscriptionInfo": {
+    "isPremium": true,
+    "subscriptionStatus": "active",
+    "subscriptionPlan": "free",
+    "subscriptionEndDate": "2025-09-29T04:03:06.188Z",
+    "stripeCustomerId": "cus_SwcN02AivxrSrS",
+    "stripeSubscriptionId": null
+  },
+  "isLoading": false,
+  "isPremium": true,
+  "subscriptionStatus": "active"
+}
+premium-compress.tsx:293 User data: {
+  "user": {
+    "id": "f4e6a87f-db49-4daa-82a4-123c6392969a",
+    "email": "master@microjpeg.com",
+    "firstName": "Master",
+    "lastName": "Test",
+    "profileImageUrl": null,
+    "isEmailVerified": "true",
+    "emailVerificationToken": null,
+    "emailVerificationExpires": null,
+    "stripeCustomerId": "cus_SwcN02AivxrSrS",
+    "stripeSubscriptionId": null,
+    "subscriptionTier": "pro",
+    "subscriptionStatus": "active",
+    "subscriptionEndDate": "2025-09-29T04:03:06.188Z",
+    "monthlyOperations": 0,
+    "dailyOperations": 0,
+    "hourlyOperations": 0,
+    "lastOperationAt": null,
+    "bytesProcessed": 0,
+    "isPremium": true,
+    "purchasedCredits": 0,
+    "totalCreditsUsed": 0,
+    "accountStatus": "active",
+    "suspendedAt": null,
+    "suspensionReason": null,
+    "lastLogin": "2025-09-04T16:27:05.079Z",
+    "createdAt": "2025-08-27T13:02:39.055Z",
+    "updatedAt": "2025-09-04T16:29:10.749Z"
+  },
+  "isAuthenticated": true
+}
+premium-compress.tsx:292 Subscription hook data: {
+  "subscriptionInfo": {
+    "isPremium": true,
+    "subscriptionStatus": "active",
+    "subscriptionPlan": "free",
+    "subscriptionEndDate": "2025-09-29T04:03:06.188Z",
+    "stripeCustomerId": "cus_SwcN02AivxrSrS",
+    "stripeSubscriptionId": null
+  },
+  "isLoading": false,
+  "isPremium": true,
+  "subscriptionStatus": "active"
+}
+premium-compress.tsx:293 User data: {
+  "user": {
+    "id": "f4e6a87f-db49-4daa-82a4-123c6392969a",
+    "email": "master@microjpeg.com",
+    "firstName": "Master",
+    "lastName": "Test",
+    "profileImageUrl": null,
+    "isEmailVerified": "true",
+    "emailVerificationToken": null,
+    "emailVerificationExpires": null,
+    "stripeCustomerId": "cus_SwcN02AivxrSrS",
+    "stripeSubscriptionId": null,
+    "subscriptionTier": "pro",
+    "subscriptionStatus": "active",
+    "subscriptionEndDate": "2025-09-29T04:03:06.188Z",
+    "monthlyOperations": 0,
+    "dailyOperations": 0,
+    "hourlyOperations": 0,
+    "lastOperationAt": null,
+    "bytesProcessed": 0,
+    "isPremium": true,
+    "purchasedCredits": 0,
+    "totalCreditsUsed": 0,
+    "accountStatus": "active",
+    "suspendedAt": null,
+    "suspensionReason": null,
+    "lastLogin": "2025-09-04T16:27:05.079Z",
+    "createdAt": "2025-08-27T13:02:39.055Z",
+    "updatedAt": "2025-09-04T16:29:10.749Z"
+  },
+  "isAuthenticated": true
+}
