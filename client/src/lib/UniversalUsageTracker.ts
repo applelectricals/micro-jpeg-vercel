@@ -1,4 +1,49 @@
-import { USER_LIMITS, UserType } from '../../../server/userLimits';
+// User limits and types moved to shared schema to fix build error
+type UserType = 'free' | 'premium' | 'enterprise' | 'anonymous' | 'test-premium';
+
+const USER_LIMITS: Record<UserType, {
+  monthly: { raw?: number; regular?: number; total: number };
+  daily: { raw?: number; regular?: number; total: number };
+  hourly: { raw?: number; regular?: number; total: number };
+  maxFileSize: number;
+  concurrent: number;
+}> = {
+  free: {
+    monthly: { raw: 100, regular: 500, total: 500 },
+    daily: { raw: 10, regular: 25, total: 25 },
+    hourly: { raw: 5, regular: 5, total: 5 },
+    maxFileSize: 10 * 1024 * 1024, // 10MB
+    concurrent: 1
+  },
+  premium: {
+    monthly: { total: 10000 },
+    daily: { total: 500 },
+    hourly: { total: 100 },
+    maxFileSize: 50 * 1024 * 1024, // 50MB
+    concurrent: 3
+  },
+  enterprise: {
+    monthly: { total: 50000 },
+    daily: { total: 5000 },
+    hourly: { total: 1000 },
+    maxFileSize: 200 * 1024 * 1024, // 200MB
+    concurrent: 5
+  },
+  anonymous: {
+    monthly: { total: 500 },
+    daily: { total: 25 },
+    hourly: { total: 5 },
+    maxFileSize: 5 * 1024 * 1024, // 5MB
+    concurrent: 1
+  },
+  'test-premium': {
+    monthly: { total: 300 },
+    daily: { total: 300 },
+    hourly: { total: 300 },
+    maxFileSize: 100 * 1024 * 1024, // 100MB
+    concurrent: 2
+  }
+};
 
 // Universal Usage Tracker - parallel system to page-based tracking
 class UniversalUsageTracker {
