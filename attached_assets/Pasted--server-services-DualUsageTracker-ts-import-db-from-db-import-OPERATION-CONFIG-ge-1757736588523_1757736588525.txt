@@ -1,0 +1,278 @@
+// server/services/DualUsageTracker.ts
+
+import { db } from '../db';
+import { OPERATION_CONFIG, getFileType } from '../config/operationLimits';
+
+export class DualUsageTracker {
+  private userId?: string;
+  private sessionId: string;
+  private userType: 'anonymous' | 'free' | 'premium' | 'enterprise';
+
+  constructor(userId: string | undefined, sessionId: string, userType: string) {
+    this.userId = userId;
+    this.sessionId = sessionId;
+    this.userType = userType as any;
+  }
+
+  // Check if operation is allowed
+  async canPerformOperation(
+    filename: string, 
+    fileSize: number,
+    pageIdentifier?: string
+  ): Promise<{
+    allowed: boolean;
+    reason?: string;
+    limits?: any;
+    usage?: any;
+  }> {
+    const fileType = getFileType(filename);
+    
+    if (fileType === 'unknown') {
+      return { 
+        allowed: false, 
+        reason: 'Unsupported file format' 
+      };
+    }
+
+    // Check file size limit
+    const maxSize = OPERATION_CONFIG.maxFileSize[fileType][this.userType];
+    if (fileSize > maxSize) {
+      return {
+        allowed: false,
+        reason: `File too large. Maximum ${Math.round(maxSize / 1024 / 1024)}MB for ${fileType} files.`
+      };
+    }
+
+    // Get current usage
+    const usage = await this.getCurrentUsage();
+    const limits = this.getLimits(fileType, pageIdentifier);
+
+    // Check limits
+    if (fileType === 'raw') {
+      if (usage.raw_hourly >= limits.hourly) {
+        return { 
+          allowed: false, 
+          reason: `Hourly RAW limit reached (${limits.hourly})`,
+          usage,
+          limits
+        };
+      }
+      if (usage.raw_daily >= limits.daily) {
+        return { 
+          allowed: false, 
+          reason: `Daily RAW limit reached (${limits.daily})`,
+          usage,
+          limits
+        };
+      }
+      if (usage.raw_monthly >= limits.monthly) {
+        return { 
+          allowed: false, 
+          reason: `Monthly RAW limit reached (${limits.monthly})`,
+          usage,
+          limits
+        };
+      }
+    } else {
+      if (usage.regular_hourly >= limits.hourly) {
+        return { 
+          allowed: false, 
+          reason: `Hourly limit reached (${limits.hourly})`,
+          usage,
+          limits
+        };
+      }
+      if (usage.regular_daily >= limits.daily) {
+        return { 
+          allowed: false, 
+          reason: `Daily limit reached (${limits.daily})`,
+          usage,
+          limits
+        };
+      }
+      if (usage.regular_monthly >= limits.monthly) {
+        return { 
+          allowed: false, 
+          reason: `Monthly limit reached (${limits.monthly})`,
+          usage,
+          limits
+        };
+      }
+    }
+
+    return { 
+      allowed: true,
+      usage,
+      limits
+    };
+  }
+
+  // Record successful operation
+  async recordOperation(
+    filename: string,
+    fileSize: number,
+    pageIdentifier: string
+  ): Promise<void> {
+    const fileType = getFileType(filename);
+    
+    // Update usage counters
+    await this.incrementUsage(fileType);
+    
+    // Log operation
+    await db.query(
+      `INSERT INTO operation_log 
+       (user_id, session_id, operation_type, file_format, file_size_mb, page_identifier)
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [
+        this.userId || null,
+        this.sessionId,
+        fileType,
+        filename.split('.').pop(),
+        Math.round(fileSize / 1024 / 1024),
+        pageIdentifier
+      ]
+    );
+  }
+
+  // Get current usage with automatic reset
+  private async getCurrentUsage(): Promise<any> {
+    const now = new Date();
+    
+    // Try to get existing usage
+    let usage = await db.query(
+      `SELECT * FROM user_usage 
+       WHERE user_id = ? AND session_id = ?`,
+      [this.userId || 'anonymous', this.sessionId]
+    );
+
+    if (!usage || usage.length === 0) {
+      // Create new usage record
+      await db.query(
+        `INSERT INTO user_usage (user_id, session_id)
+         VALUES (?, ?)`,
+        [this.userId || 'anonymous', this.sessionId]
+      );
+      
+      return {
+        regular_monthly: 0,
+        regular_daily: 0,
+        regular_hourly: 0,
+        raw_monthly: 0,
+        raw_daily: 0,
+        raw_hourly: 0
+      };
+    }
+
+    usage = usage[0];
+
+    // Check and reset counters if needed
+    const hourlyReset = new Date(usage.hourly_reset_at);
+    const dailyReset = new Date(usage.daily_reset_at);
+    const monthlyReset = new Date(usage.monthly_reset_at);
+
+    let needsUpdate = false;
+    
+    // Reset hourly
+    if (now.getTime() - hourlyReset.getTime() > 3600000) { // 1 hour
+      usage.regular_hourly = 0;
+      usage.raw_hourly = 0;
+      usage.hourly_reset_at = now;
+      needsUpdate = true;
+    }
+
+    // Reset daily
+    if (now.getTime() - dailyReset.getTime() > 86400000) { // 24 hours
+      usage.regular_daily = 0;
+      usage.raw_daily = 0;
+      usage.daily_reset_at = now;
+      needsUpdate = true;
+    }
+
+    // Reset monthly
+    if (now.getTime() - monthlyReset.getTime() > 2592000000) { // 30 days
+      usage.regular_monthly = 0;
+      usage.raw_monthly = 0;
+      usage.monthly_bandwidth_mb = 0;
+      usage.monthly_reset_at = now;
+      needsUpdate = true;
+    }
+
+    if (needsUpdate) {
+      await this.updateResets(usage);
+    }
+
+    return usage;
+  }
+
+  // Increment usage counters
+  private async incrementUsage(fileType: 'regular' | 'raw'): Promise<void> {
+    const columns = fileType === 'raw' 
+      ? 'raw_monthly = raw_monthly + 1, raw_daily = raw_daily + 1, raw_hourly = raw_hourly + 1'
+      : 'regular_monthly = regular_monthly + 1, regular_daily = regular_daily + 1, regular_hourly = regular_hourly + 1';
+
+    await db.query(
+      `UPDATE user_usage 
+       SET ${columns}, updated_at = NOW()
+       WHERE user_id = ? AND session_id = ?`,
+      [this.userId || 'anonymous', this.sessionId]
+    );
+  }
+
+  // Get limits for file type
+  private getLimits(fileType: 'regular' | 'raw', pageIdentifier?: string): any {
+    const baseLimits = OPERATION_CONFIG.limits[this.userType][fileType];
+    
+    // Check for page-specific overrides
+    if (pageIdentifier && OPERATION_CONFIG.pageOverrides[pageIdentifier]) {
+      const override = OPERATION_CONFIG.pageOverrides[pageIdentifier][this.userType];
+      if (override) {
+        return { ...baseLimits, ...override };
+      }
+    }
+    
+    return baseLimits;
+  }
+
+  // Update reset timestamps
+  private async updateResets(usage: any): Promise<void> {
+    await db.query(
+      `UPDATE user_usage 
+       SET regular_hourly = ?, regular_daily = ?, regular_monthly = ?,
+           raw_hourly = ?, raw_daily = ?, raw_monthly = ?,
+           hourly_reset_at = ?, daily_reset_at = ?, monthly_reset_at = ?
+       WHERE user_id = ? AND session_id = ?`,
+      [
+        usage.regular_hourly, usage.regular_daily, usage.regular_monthly,
+        usage.raw_hourly, usage.raw_daily, usage.raw_monthly,
+        usage.hourly_reset_at, usage.daily_reset_at, usage.monthly_reset_at,
+        this.userId || 'anonymous', this.sessionId
+      ]
+    );
+  }
+
+  // Get usage statistics for display
+  async getUsageStats(): Promise<any> {
+    const usage = await this.getCurrentUsage();
+    const regularLimits = OPERATION_CONFIG.limits[this.userType].regular;
+    const rawLimits = OPERATION_CONFIG.limits[this.userType].raw;
+
+    return {
+      regular: {
+        monthly: { used: usage.regular_monthly, limit: regularLimits.monthly },
+        daily: { used: usage.regular_daily, limit: regularLimits.daily },
+        hourly: { used: usage.regular_hourly, limit: regularLimits.hourly }
+      },
+      raw: {
+        monthly: { used: usage.raw_monthly, limit: rawLimits.monthly },
+        daily: { used: usage.raw_daily, limit: rawLimits.daily },
+        hourly: { used: usage.raw_hourly, limit: rawLimits.hourly }
+      },
+      combined: {
+        monthly: {
+          used: usage.regular_monthly + usage.raw_monthly,
+          limit: regularLimits.monthly + rawLimits.monthly
+        }
+      }
+    };
+  }
+}
