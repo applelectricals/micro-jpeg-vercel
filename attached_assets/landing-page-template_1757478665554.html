@@ -1,0 +1,598 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Convert CR2 to JPG Online - Free Canon RAW Converter | MicroJPEG</title>
+    <meta name="description" content="Convert Canon CR2 RAW files to JPG instantly. Free for up to 500 conversions/month. Preserve quality, batch process, API access available.">
+    
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            line-height: 1.6;
+            color: #333;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        
+        header {
+            background: rgba(255, 255, 255, 0.95);
+            padding: 20px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+            backdrop-filter: blur(10px);
+        }
+        
+        h1 {
+            font-size: 2.5em;
+            color: #2d3748;
+            margin-bottom: 10px;
+        }
+        
+        .subtitle {
+            color: #718096;
+            font-size: 1.2em;
+        }
+        
+        .converter-box {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        
+        .drop-zone {
+            border: 3px dashed #cbd5e0;
+            border-radius: 15px;
+            padding: 60px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            background: #f7fafc;
+        }
+        
+        .drop-zone:hover {
+            border-color: #667eea;
+            background: #edf2ff;
+        }
+        
+        .drop-zone.active {
+            border-color: #667eea;
+            background: #e6efff;
+        }
+        
+        .file-input {
+            display: none;
+        }
+        
+        .upload-icon {
+            width: 80px;
+            height: 80px;
+            margin: 0 auto 20px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 36px;
+        }
+        
+        .usage-counter {
+            background: #f7fafc;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .counter-bar {
+            flex: 1;
+            height: 8px;
+            background: #e2e8f0;
+            border-radius: 4px;
+            margin: 0 15px;
+            overflow: hidden;
+        }
+        
+        .counter-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #48bb78, #38a169);
+            border-radius: 4px;
+            transition: width 0.3s ease;
+        }
+        
+        .pricing-strip {
+            background: linear-gradient(135deg, #f6f9fc 0%, #edf2ff 100%);
+            border-radius: 15px;
+            padding: 30px;
+            margin: 30px 0;
+        }
+        
+        .pricing-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        
+        .price-card {
+            background: white;
+            border-radius: 10px;
+            padding: 20px;
+            border: 2px solid transparent;
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        
+        .price-card.featured {
+            border-color: #667eea;
+            transform: scale(1.05);
+        }
+        
+        .price-card:hover {
+            box-shadow: 0 10px 30px rgba(0,0,0,0.1);
+        }
+        
+        .badge {
+            position: absolute;
+            top: -12px;
+            right: 20px;
+            background: #667eea;
+            color: white;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: bold;
+        }
+        
+        .plan-name {
+            font-size: 1.3em;
+            font-weight: bold;
+            margin-bottom: 10px;
+        }
+        
+        .plan-price {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+            margin-bottom: 10px;
+        }
+        
+        .plan-operations {
+            color: #718096;
+            margin-bottom: 15px;
+            font-weight: 500;
+        }
+        
+        .plan-features {
+            list-style: none;
+            color: #4a5568;
+        }
+        
+        .plan-features li {
+            padding: 5px 0;
+            padding-left: 20px;
+            position: relative;
+        }
+        
+        .plan-features li:before {
+            content: "✓";
+            position: absolute;
+            left: 0;
+            color: #48bb78;
+            font-weight: bold;
+        }
+        
+        .btn {
+            display: inline-block;
+            padding: 12px 30px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: bold;
+            transition: transform 0.2s ease;
+            border: none;
+            cursor: pointer;
+            width: 100%;
+            text-align: center;
+            margin-top: 15px;
+        }
+        
+        .btn:hover {
+            transform: translateY(-2px);
+        }
+        
+        .btn-secondary {
+            background: #f7fafc;
+            color: #4a5568;
+            border: 2px solid #e2e8f0;
+        }
+        
+        .features-section {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            margin: 30px 0;
+        }
+        
+        .features-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 30px;
+            margin-top: 30px;
+        }
+        
+        .feature-card {
+            padding: 20px;
+            border-radius: 10px;
+            background: #f7fafc;
+        }
+        
+        .feature-icon {
+            width: 50px;
+            height: 50px;
+            background: linear-gradient(135deg, #667eea, #764ba2);
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 24px;
+            margin-bottom: 15px;
+        }
+        
+        .stats-bar {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 20px;
+            margin: 30px 0;
+            background: white;
+            padding: 30px;
+            border-radius: 15px;
+        }
+        
+        .stat {
+            text-align: center;
+        }
+        
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #667eea;
+        }
+        
+        .stat-label {
+            color: #718096;
+            margin-top: 5px;
+        }
+        
+        @media (max-width: 768px) {
+            .pricing-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats-bar {
+                grid-template-columns: repeat(2, 1fr);
+            }
+            
+            h1 {
+                font-size: 1.8em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <header>
+            <h1>Convert CR2 to JPG Online</h1>
+            <p class="subtitle">Professional Canon RAW to JPEG converter - Free up to 500 conversions/month</p>
+        </header>
+        
+        <!-- Usage Counter (Shows for non-signed-in users) -->
+        <div class="usage-counter" id="usageCounter">
+            <span><strong>3</strong> free conversions used today</span>
+            <div class="counter-bar">
+                <div class="counter-fill" style="width: 12%"></div>
+            </div>
+            <span><strong>22</strong> remaining today</span>
+        </div>
+        
+        <!-- Main Converter -->
+        <div class="converter-box">
+            <div class="drop-zone" id="dropZone">
+                <input type="file" class="file-input" id="fileInput" accept=".cr2,.CR2" multiple>
+                <div class="upload-icon">📷</div>
+                <h2>Drop your CR2 files here</h2>
+                <p style="margin: 15px 0; color: #718096;">or click to browse</p>
+                <p style="color: #a0aec0; font-size: 14px;">Supports: CR2, CR3 • Max 10MB (Free) / 50MB (Pro) / 200MB (Enterprise)</p>
+            </div>
+            
+            <!-- Conversion Options (appears after file upload) -->
+            <div id="conversionOptions" style="display: none; margin-top: 30px;">
+                <h3 style="margin-bottom: 20px;">Conversion Settings</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 20px;">
+                    <div>
+                        <label style="display: block; margin-bottom: 8px; font-weight: bold;">Quality</label>
+                        <input type="range" min="60" max="100" value="85" style="width: 100%;">
+                        <span style="color: #718096; font-size: 14px;">85%</span>
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 8px; font-weight: bold;">Max Width</label>
+                        <input type="number" placeholder="Original" style="width: 100%; padding: 8px; border: 1px solid #e2e8f0; border-radius: 5px;">
+                    </div>
+                    <div>
+                        <label style="display: block; margin-bottom: 8px; font-weight: bold;">Format</label>
+                        <select style="width: 100%; padding: 8px; border: 1px solid #e2e8f0; border-radius: 5px;">
+                            <option>JPG</option>
+                            <option>PNG</option>
+                            <option>WebP</option>
+                            <option>AVIF</option>
+                        </select>
+                    </div>
+                </div>
+                <button class="btn" style="margin-top: 20px;">Convert Now</button>
+            </div>
+        </div>
+        
+        <!-- Pricing Strip - Aligned with your structure -->
+        <div class="pricing-strip">
+            <h2 style="text-align: center; margin-bottom: 10px;">Simple, Transparent Pricing</h2>
+            <p style="text-align: center; color: #718096;">Same limits for Web & API usage</p>
+            
+            <div class="pricing-grid">
+                <!-- Free Plan -->
+                <div class="price-card">
+                    <div class="plan-name">Free</div>
+                    <div class="plan-price">$0</div>
+                    <div class="plan-operations">500 operations/month</div>
+                    <ul class="plan-features">
+                        <li>Max 10MB per file</li>
+                        <li>25 operations/day limit</li>
+                        <li>All formats supported</li>
+                        <li>API access included</li>
+                        <li>WordPress plugin</li>
+                    </ul>
+                    <button class="btn btn-secondary">Start Free</button>
+                </div>
+                
+                <!-- Pro Plan -->
+                <div class="price-card featured">
+                    <span class="badge">POPULAR</span>
+                    <div class="plan-name">Pro</div>
+                    <div class="plan-price">$29</div>
+                    <div class="plan-operations">10,000 operations/month</div>
+                    <ul class="plan-features">
+                        <li>Max 50MB per file</li>
+                        <li>100 operations/hour</li>
+                        <li>3 concurrent uploads</li>
+                        <li>Priority processing</li>
+                        <li>Email support</li>
+                        <li>$0.005 per extra operation</li>
+                    </ul>
+                    <button class="btn">Start 7-Day Trial</button>
+                </div>
+                
+                <!-- Enterprise Plan -->
+                <div class="price-card">
+                    <div class="plan-name">Enterprise</div>
+                    <div class="plan-price">$99</div>
+                    <div class="plan-operations">50,000 operations/month</div>
+                    <ul class="plan-features">
+                        <li>Max 200MB per file</li>
+                        <li>No rate limits</li>
+                        <li>5 concurrent uploads</li>
+                        <li>SLA guarantee</li>
+                        <li>Priority support</li>
+                        <li>$0.005 per extra operation</li>
+                    </ul>
+                    <button class="btn">Contact Sales</button>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Stats Bar -->
+        <div class="stats-bar">
+            <div class="stat">
+                <div class="stat-number">2.5M+</div>
+                <div class="stat-label">Images Processed</div>
+            </div>
+            <div class="stat">
+                <div class="stat-number">45%</div>
+                <div class="stat-label">Average Compression</div>
+            </div>
+            <div class="stat">
+                <div class="stat-number">12,000+</div>
+                <div class="stat-label">Happy Photographers</div>
+            </div>
+            <div class="stat">
+                <div class="stat-number">99.9%</div>
+                <div class="stat-label">Uptime</div>
+            </div>
+        </div>
+        
+        <!-- Features Section -->
+        <div class="features-section">
+            <h2 style="text-align: center; margin-bottom: 10px;">Why Photographers Choose MicroJPEG</h2>
+            <p style="text-align: center; color: #718096;">Specifically optimized for Canon CR2 RAW files</p>
+            
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">🎨</div>
+                    <h3>Preserve Color Profiles</h3>
+                    <p style="color: #718096;">Maintains Adobe RGB, sRGB, and ProPhoto RGB color spaces from your Canon camera</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">⚡</div>
+                    <h3>Batch Processing</h3>
+                    <p style="color: #718096;">Convert entire photoshoots at once. Process up to 100 CR2 files simultaneously (Pro plan)</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">🔧</div>
+                    <h3>Advanced Controls</h3>
+                    <p style="color: #718096;">Adjust quality, dimensions, sharpness, and metadata preservation options</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">🔌</div>
+                    <h3>API & Integrations</h3>
+                    <p style="color: #718096;">Automate with our API, WordPress plugin, or Zapier integration</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">💾</div>
+                    <h3>Cloud Storage</h3>
+                    <p style="color: #718096;">Direct export to Google Drive, Dropbox, or AWS S3 (Pro & Enterprise)</p>
+                </div>
+                
+                <div class="feature-card">
+                    <div class="feature-icon">🛡️</div>
+                    <h3>Privacy First</h3>
+                    <p style="color: #718096;">Your images are deleted after 24 hours. SSL encryption throughout</p>
+                </div>
+            </div>
+        </div>
+        
+        <!-- SEO Content Section -->
+        <div style="background: white; border-radius: 20px; padding: 40px; margin: 30px 0;">
+            <h2>Canon CR2 to JPG Conversion Guide</h2>
+            
+            <h3 style="margin-top: 30px;">What is CR2 Format?</h3>
+            <p style="color: #4a5568; line-height: 1.8;">
+                CR2 (Canon Raw 2) is Canon's proprietary RAW image format used by most Canon DSLR cameras including the EOS series. 
+                RAW files contain unprocessed image data directly from the camera's sensor, providing maximum flexibility for post-processing 
+                but requiring conversion for web use or sharing.
+            </p>
+            
+            <h3 style="margin-top: 30px;">Why Convert CR2 to JPG?</h3>
+            <ul style="color: #4a5568; line-height: 1.8; padding-left: 20px;">
+                <li><strong>Universal Compatibility:</strong> JPG works everywhere - web, email, social media</li>
+                <li><strong>Smaller File Sizes:</strong> Reduce 25MB CR2 files to 2-3MB JPGs without visible quality loss</li>
+                <li><strong>Faster Loading:</strong> Optimized for web performance and quick previews</li>
+                <li><strong>Client Delivery:</strong> Easy to share with clients who don't have RAW processing software</li>
+            </ul>
+            
+            <h3 style="margin-top: 30px;">Supported Canon Cameras</h3>
+            <p style="color: #4a5568; line-height: 1.8;">
+                Our converter supports CR2 files from all Canon EOS cameras including: 5D Mark IV, 6D Mark II, 7D Mark II, 
+                80D, 90D, R5, R6, R7, RP, and all Rebel series cameras (T7i, T8i, etc).
+            </p>
+            
+            <h3 style="margin-top: 30px;">API Example</h3>
+            <pre style="background: #f7fafc; padding: 20px; border-radius: 10px; overflow-x: auto;">
+<code>// Convert CR2 to JPG using our API
+const formData = new FormData();
+formData.append('file', cr2File);
+formData.append('format', 'jpg');
+formData.append('quality', '90');
+
+fetch('https://api.microjpeg.com/convert', {
+  method: 'POST',
+  headers: {
+    'X-API-Key': 'your-api-key'
+  },
+  body: formData
+})
+.then(res => res.json())
+.then(data => console.log(data.url));</code>
+            </pre>
+        </div>
+        
+        <!-- CTA Section -->
+        <div style="background: linear-gradient(135deg, #667eea, #764ba2); border-radius: 20px; padding: 50px; text-align: center; color: white;">
+            <h2 style="font-size: 2.5em; margin-bottom: 20px;">Ready to Convert Your Canon RAW Files?</h2>
+            <p style="font-size: 1.2em; margin-bottom: 30px;">Join 12,000+ photographers who trust MicroJPEG</p>
+            <button class="btn" style="background: white; color: #667eea; padding: 15px 40px; font-size: 1.1em;">
+                Start Free - No Credit Card Required
+            </button>
+            <p style="margin-top: 20px; opacity: 0.9;">✓ 500 free conversions/month ✓ All formats supported ✓ API access included</p>
+        </div>
+    </div>
+    
+    <script>
+        // Drop zone functionality
+        const dropZone = document.getElementById('dropZone');
+        const fileInput = document.getElementById('fileInput');
+        const conversionOptions = document.getElementById('conversionOptions');
+        
+        dropZone.addEventListener('click', () => fileInput.click());
+        
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('active');
+        });
+        
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('active');
+        });
+        
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('active');
+            handleFiles(e.dataTransfer.files);
+        });
+        
+        fileInput.addEventListener('change', (e) => {
+            handleFiles(e.target.files);
+        });
+        
+        function handleFiles(files) {
+            if (files.length > 0) {
+                // Show conversion options
+                conversionOptions.style.display = 'block';
+                
+                // Update drop zone text
+                dropZone.innerHTML = `
+                    <div class="upload-icon">✓</div>
+                    <h2>${files.length} CR2 file(s) selected</h2>
+                    <p style="margin: 15px 0; color: #718096;">Click to change files</p>
+                `;
+                
+                // Update usage counter
+                updateUsageCounter();
+            }
+        }
+        
+        function updateUsageCounter() {
+            // Simulate usage tracking
+            const used = parseInt(localStorage.getItem('dailyUsage') || '0') + 1;
+            localStorage.setItem('dailyUsage', used);
+            
+            document.getElementById('usageCounter').innerHTML = `
+                <span><strong>${used}</strong> free conversions used today</span>
+                <div class="counter-bar">
+                    <div class="counter-fill" style="width: ${(used/25)*100}%"></div>
+                </div>
+                <span><strong>${Math.max(0, 25-used)}</strong> remaining today</span>
+            `;
+            
+            if (used >= 25) {
+                // Show upgrade prompt
+                setTimeout(() => {
+                    alert('Daily limit reached! Sign up for free to get 500 monthly conversions or upgrade to Pro for unlimited.');
+                }, 1000);
+            }
+        }
+    </script>
+</body>
+</html>
