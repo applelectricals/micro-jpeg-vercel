@@ -1,0 +1,66 @@
+12The resource <URL> was preloaded using link preload but not used within a few seconds from the window's load event. Please make sure it has an appropriate `as` value and it is preloaded intentionally.Understand this warning
+performance.ts:32 [Performance] LCP: 46692ms
+convert-cr2-to-jpg.tsx:194 SessionManager.getSession() returning: 0 results
+convert-cr2-to-jpg.tsx:194 SessionManager.getSession() returning: 0 results
+convert-cr2-to-jpg.tsx:871 Auto-process effect triggered: {newlyAddedFilesLength: 1, isProcessing: false, selectedFormatsLength: 1, selectedFormats: Array(1)}
+convert-cr2-to-jpg.tsx:879 All conditions met - starting auto-processing in 200ms
+convert-cr2-to-jpg.tsx:883 Timer fired - calling startProcessing()
+convert-cr2-to-jpg.tsx:763 Starting compression request...
+convert-cr2-to-jpg.tsx:764 Files to process: [{…}]
+convert-cr2-to-jpg.tsx:765 Page source: cr2-converter
+convert-cr2-to-jpg.tsx:766 Settings: {quality: 85, outputFormat: Array(1), resizeOption: 'keep-original', resizePercentage: 100, compressionAlgorithm: 'standard', …}
+convert-cr2-to-jpg.tsx:775 Making fetch request to /api/compress...
+convert-cr2-to-jpg.tsx:871 Auto-process effect triggered: {newlyAddedFilesLength: 1, isProcessing: true, selectedFormatsLength: 1, selectedFormats: Array(1)}
+convert-cr2-to-jpg.tsx:889 Auto-process conditions not met: {hasNewFiles: true, notProcessing: false, hasFormats: true}
+convert-cr2-to-jpg.tsx:776  POST https://277e5bf1-9b67-405a-ab94-816a93a86842-00-31384xxtk9d6l.worf.replit.dev/api/compress 400 (Bad Request)
+(anonymous) @ convert-cr2-to-jpg.tsx:776
+(anonymous) @ convert-cr2-to-jpg.tsx:884
+setTimeout
+(anonymous) @ convert-cr2-to-jpg.tsx:882
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=cd5acc46:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=cd5acc46:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=cd5acc46:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=cd5acc46:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=cd5acc46:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=cd5acc46:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=cd5acc46:19447
+commitRootImpl @ chunk-RPCDYKBN.js?v=cd5acc46:19416
+commitRoot @ chunk-RPCDYKBN.js?v=cd5acc46:19277
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=cd5acc46:18895
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=cd5acc46:9119
+flushSync @ chunk-RPCDYKBN.js?v=cd5acc46:18959
+finishEventHandler @ chunk-RPCDYKBN.js?v=cd5acc46:3569
+batchedUpdates @ chunk-RPCDYKBN.js?v=cd5acc46:3582
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=cd5acc46:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=cd5acc46:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=cd5acc46:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=cd5acc46:5449Understand this error
+convert-cr2-to-jpg.tsx:782 Received response: 400 Bad Request
+convert-cr2-to-jpg.tsx:786 Response not OK: 400 Bad Request
+convert-cr2-to-jpg.tsx:847 Compression error: Error: HTTP error! status: 400
+    at convert-cr2-to-jpg.tsx:787:17
+(anonymous) @ convert-cr2-to-jpg.tsx:847
+await in (anonymous)
+(anonymous) @ convert-cr2-to-jpg.tsx:884
+setTimeout
+(anonymous) @ convert-cr2-to-jpg.tsx:882
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=cd5acc46:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=cd5acc46:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=cd5acc46:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=cd5acc46:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=cd5acc46:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=cd5acc46:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=cd5acc46:19447
+commitRootImpl @ chunk-RPCDYKBN.js?v=cd5acc46:19416
+commitRoot @ chunk-RPCDYKBN.js?v=cd5acc46:19277
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=cd5acc46:18895
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=cd5acc46:9119
+flushSync @ chunk-RPCDYKBN.js?v=cd5acc46:18959
+finishEventHandler @ chunk-RPCDYKBN.js?v=cd5acc46:3569
+batchedUpdates @ chunk-RPCDYKBN.js?v=cd5acc46:3582
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=cd5acc46:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=cd5acc46:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=cd5acc46:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=cd5acc46:5449Understand this error
+convert-cr2-to-jpg.tsx:871 Auto-process effect triggered: {newlyAddedFilesLength: 0, isProcessing: false, selectedFormatsLength: 1, selectedFormats: Array(1)}
+convert-cr2-to-jpg.tsx:889 Auto-process conditions not met: {hasNewFiles: false, notProcessing: true, hasFormats: true}
