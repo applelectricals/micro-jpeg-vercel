@@ -1,0 +1,131 @@
+<svg viewBox="0 0 800 500" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="chartGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#3b82f6;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#1d4ed8;stop-opacity:0.9" />
+    </linearGradient>
+    <linearGradient id="qualityGradient" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" style="stop-color:#10b981;stop-opacity:0.8" />
+      <stop offset="100%" style="stop-color:#059669;stop-opacity:0.9" />
+    </linearGradient>
+    <linearGradient id="backgroundGradient" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f8fafc;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e2e8f0;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Background -->
+  <rect x="0" y="0" width="800" height="500" fill="url(#backgroundGradient)" rx="16"/>
+  
+  <!-- Title and subtitle -->
+  <text x="400" y="40" text-anchor="middle" font-family="Inter, sans-serif" font-size="24" font-weight="700" fill="#1f2937">JPEG Quality vs File Size Analysis</text>
+  <text x="400" y="65" text-anchor="middle" font-family="Inter, sans-serif" font-size="14" fill="#6b7280">Find the perfect balance between quality and compression for optimal results</text>
+  
+  <!-- Chart background -->
+  <rect x="100" y="100" width="600" height="300" fill="#ffffff" stroke="#e5e7eb" stroke-width="2" rx="8"/>
+  
+  <!-- Grid lines -->
+  <g stroke="#f3f4f6" stroke-width="1">
+    <!-- Vertical grid lines -->
+    <line x1="160" y1="100" x2="160" y2="400"/>
+    <line x1="220" y1="100" x2="220" y2="400"/>
+    <line x1="280" y1="100" x2="280" y2="400"/>
+    <line x1="340" y1="100" x2="340" y2="400"/>
+    <line x1="400" y1="100" x2="400" y2="400"/>
+    <line x1="460" y1="100" x2="460" y2="400"/>
+    <line x1="520" y1="100" x2="520" y2="400"/>
+    <line x1="580" y1="100" x2="580" y2="400"/>
+    <line x1="640" y1="100" x2="640" y2="400"/>
+    
+    <!-- Horizontal grid lines -->
+    <line x1="100" y1="150" x2="700" y2="150"/>
+    <line x1="100" y1="200" x2="700" y2="200"/>
+    <line x1="100" y1="250" x2="700" y2="250"/>
+    <line x1="100" y1="300" x2="700" y2="300"/>
+    <line x1="100" y1="350" x2="700" y2="350"/>
+  </g>
+  
+  <!-- Y-axis labels (File Size) -->
+  <text x="90" y="110" text-anchor="end" font-family="Inter, sans-serif" font-size="12" fill="#6b7280">2.5MB</text>
+  <text x="90" y="155" text-anchor="end" font-family="Inter, sans-serif" font-size="12" fill="#6b7280">2.0MB</text>
+  <text x="90" y="205" text-anchor="end" font-family="Inter, sans-serif" font-size="12" fill="#6b7280">1.5MB</text>
+  <text x="90" y="255" text-anchor="end" font-family="Inter, sans-serif" font-size="12" fill="#6b7280">1.0MB</text>
+  <text x="90" y="305" text-anchor="end" font-family="Inter, sans-serif" font-size="12" fill="#6b7280">0.5MB</text>
+  <text x="90" y="355" text-anchor="end" font-family="Inter, sans-serif" font-size="12" fill="#6b7280">0.1MB</text>
+  <text x="90" y="405" text-anchor="end" font-family="Inter, sans-serif" font-size="12" fill="#6b7280">0MB</text>
+  
+  <!-- X-axis labels (Quality) -->
+  <text x="130" y="420" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" fill="#6b7280">30%</text>
+  <text x="190" y="420" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" fill="#6b7280">40%</text>
+  <text x="250" y="420" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" fill="#6b7280">50%</text>
+  <text x="310" y="420" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" fill="#6b7280">60%</text>
+  <text x="370" y="420" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" fill="#6b7280">70%</text>
+  <text x="430" y="420" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" fill="#6b7280">80%</text>
+  <text x="490" y="420" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" fill="#6b7280">85%</text>
+  <text x="550" y="420" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" fill="#6b7280">90%</text>
+  <text x="610" y="420" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" fill="#6b7280">95%</text>
+  <text x="670" y="420" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" fill="#6b7280">100%</text>
+  
+  <!-- File size curve -->
+  <path d="M130 110 Q190 120 250 140 Q310 170 370 200 Q430 240 490 280 Q550 320 610 360 Q640 380 670 395" 
+        stroke="url(#chartGradient)" stroke-width="4" fill="none"/>
+  
+  <!-- Quality curve (inverse relationship) -->
+  <path d="M130 360 Q190 340 250 310 Q310 280 370 250 Q430 220 490 190 Q550 170 610 150 Q640 140 670 130" 
+        stroke="url(#qualityGradient)" stroke-width="4" fill="none"/>
+  
+  <!-- Data points -->
+  <g fill="#3b82f6" stroke="#ffffff" stroke-width="2">
+    <circle cx="130" cy="110" r="6"/>
+    <circle cx="250" cy="140" r="6"/>
+    <circle cx="370" cy="200" r="6"/>
+    <circle cx="430" cy="240" r="6"/>
+    <circle cx="490" cy="280" r="6"/>
+    <circle cx="550" cy="320" r="6"/>
+    <circle cx="610" cy="360" r="6"/>
+    <circle cx="670" cy="395" r="6"/>
+  </g>
+  
+  <g fill="#10b981" stroke="#ffffff" stroke-width="2">
+    <circle cx="130" cy="360" r="6"/>
+    <circle cx="250" cy="310" r="6"/>
+    <circle cx="370" cy="250" r="6"/>
+    <circle cx="430" cy="220" r="6"/>
+    <circle cx="490" cy="190" r="6"/>
+    <circle cx="550" cy="170" r="6"/>
+    <circle cx="610" cy="150" r="6"/>
+    <circle cx="670" cy="130" r="6"/>
+  </g>
+  
+  <!-- Sweet spot highlight -->
+  <circle cx="490" cy="280" r="25" fill="none" stroke="#f59e0b" stroke-width="3" stroke-dasharray="5,5"/>
+  <circle cx="490" cy="190" r="25" fill="none" stroke="#f59e0b" stroke-width="3" stroke-dasharray="5,5"/>
+  
+  <!-- Sweet spot label -->
+  <rect x="520" y="220" width="140" height="50" fill="#fef3c7" stroke="#f59e0b" stroke-width="2" rx="8"/>
+  <text x="590" y="235" text-anchor="middle" font-family="Inter, sans-serif" font-size="12" font-weight="700" fill="#92400e">Sweet Spot!</text>
+  <text x="590" y="250" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#92400e">85% Quality</text>
+  <text x="590" y="263" text-anchor="middle" font-family="Inter, sans-serif" font-size="11" fill="#92400e">Best Balance</text>
+  
+  <!-- Legend -->
+  <g transform="translate(120, 450)">
+    <rect x="0" y="0" width="400" height="40" fill="#ffffff" stroke="#e5e7eb" stroke-width="1" rx="8"/>
+    
+    <!-- File size legend -->
+    <line x1="20" y1="15" x2="40" y2="15" stroke="url(#chartGradient)" stroke-width="4"/>
+    <circle cx="30" cy="15" r="4" fill="#3b82f6" stroke="#ffffff" stroke-width="1"/>
+    <text x="50" y="19" font-family="Inter, sans-serif" font-size="12" fill="#374151">File Size (MB)</text>
+    
+    <!-- Quality legend -->
+    <line x1="180" y1="15" x2="200" y2="15" stroke="url(#qualityGradient)" stroke-width="4"/>
+    <circle cx="190" cy="15" r="4" fill="#10b981" stroke="#ffffff" stroke-width="1"/>
+    <text x="210" y="19" font-family="Inter, sans-serif" font-size="12" fill="#374151">Visual Quality (%)</text>
+    
+    <!-- Note -->
+    <text x="20" y="35" font-family="Inter, sans-serif" font-size="10" fill="#6b7280">* 85% quality setting provides optimal balance between file size and visual quality</text>
+  </g>
+  
+  <!-- Axis labels -->
+  <text x="400" y="480" text-anchor="middle" font-family="Inter, sans-serif" font-size="14" font-weight="600" fill="#374151">JPEG Quality Setting (%)</text>
+  <text x="35" y="250" text-anchor="middle" font-family="Inter, sans-serif" font-size="14" font-weight="600" fill="#374151" transform="rotate(-90, 35, 250)">File Size (MB)</text>
+</svg>
