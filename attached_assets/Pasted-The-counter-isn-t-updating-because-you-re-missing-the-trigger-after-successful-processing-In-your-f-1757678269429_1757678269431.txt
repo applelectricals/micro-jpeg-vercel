@@ -1,0 +1,55 @@
+The counter isn't updating because you're missing the trigger after successful processing. In your file processing code, after successful compression, you need to dispatch the refresh event:
+The Missing Piece:
+After successful processing (in your startProcessing or similar function), add:
+javascript// After successful compression/conversion
+if (data.results && data.results.length > 0) {
+  // Your existing code...
+  
+  // Trigger the header counter refresh
+  window.dispatchEvent(new Event('refreshUniversalCounter'));
+}
+Where to Add It:
+In your compression handling code (likely in multiple places):
+
+After main processing:
+
+javascript// In startProcessing function, after successful API call
+const data = await response.json();
+if (data.results) {
+  // ... existing code ...
+  
+  // Trigger counter refresh
+  window.dispatchEvent(new Event('refreshUniversalCounter'));
+}
+
+After format-specific processing:
+
+javascript// In processSpecificFormat function
+if (data.results && data.results.length > 0) {
+  // ... existing code ...
+  
+  // Trigger counter refresh  
+  window.dispatchEvent(new Event('refreshUniversalCounter'));
+}
+Why It's Not Working:
+Your header component is listening for the event:
+javascriptwindow.addEventListener('refreshUniversalCounter', handleRefresh);
+But nothing is actually firing this event after operations complete. The 30-second interval works, but immediate updates need the manual trigger.
+Complete Fix Pattern:
+javascript// Create a helper function
+const refreshUniversalCounter = () => {
+  console.log('🔄 Triggering universal counter refresh');
+  window.dispatchEvent(new Event('refreshUniversalCounter'));
+};
+
+// Use it after every successful operation
+// In your processing success handlers:
+refreshUniversalCounter();
+Add this trigger wherever you have successful file operations:
+
+After compression
+After conversion
+After batch processing
+After any API call that changes usage counts
+
+The counter component is already set up correctly to listen - you just need to fire the event.
