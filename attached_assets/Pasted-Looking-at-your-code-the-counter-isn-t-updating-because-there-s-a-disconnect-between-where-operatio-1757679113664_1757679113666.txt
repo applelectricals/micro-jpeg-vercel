@@ -1,0 +1,46 @@
+Looking at your code, the counter isn't updating because there's a disconnect between where operations are recorded and what the counter is fetching. The issue is in your backend endpoint:
+The Problem:
+Your API endpoint is fetching stats for pageIdentifier = '/':
+javascriptconst pageIdentifier = '/'; // Default page identifier for universal stats
+const usage = await PageIdentifierOperationCounter.getPageIdentifierUsageStats(pageIdentifier, userId, sessionId, req);
+But your operations are likely being recorded with different page identifiers (like 'cr2-free', 'main-app', etc.).
+The Fix:
+You need to aggregate ALL page operations for the user, not just '/'. Modify your backend endpoint:
+javascript// In your /api/universal-usage-stats endpoint
+// Instead of getting stats for just '/'
+const pageIdentifier = '/';
+const usage = await PageIdentifierOperationCounter.getPageIdentifierUsageStats(pageIdentifier, userId, sessionId, req);
+
+// You should aggregate all pages:
+const usage = await PageIdentifierOperationCounter.getAllUserUsageStats(userId, sessionId, req);
+// OR if that method doesn't exist, sum up all page identifiers
+Quick Debug:
+Add logging to see what's happening:
+
+In your frontend after processing:
+
+javascriptif (data.results && data.results.length > 0) {
+  console.log('✅ Processing complete, triggering refresh');
+  refreshUniversalCounter();
+  
+  // Debug: Check what the API returns
+  setTimeout(async () => {
+    const response = await fetch('/api/universal-usage-stats');
+    const stats = await response.json();
+    console.log('📊 Stats after processing:', stats);
+  }, 1000);
+}
+
+In your backend where operations are recorded:
+
+javascript// Find where you call PageIdentifierOperationCounter.recordOperation()
+console.log('Recording operation with pageIdentifier:', pageIdentifier);
+The mismatch is likely:
+
+Operations recorded with: 'cr2-free', 'compress-free', etc.
+Counter fetching from: '/' only
+
+You need to either:
+
+Record all operations under '/' for universal tracking
+Or aggregate all page identifiers when fetching stats
