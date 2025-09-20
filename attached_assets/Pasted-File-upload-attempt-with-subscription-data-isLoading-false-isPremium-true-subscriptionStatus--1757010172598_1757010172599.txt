@@ -1,0 +1,59 @@
+File upload attempt with subscription data: {isLoading: false, isPremium: true, subscriptionStatus: 'active', hasSubscriptionInfo: true}
+premium-compress.tsx:292 Subscription loading state: false
+premium-compress.tsx:293 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:292 Subscription loading state: false
+premium-compress.tsx:293 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:292 Subscription loading state: false
+premium-compress.tsx:293 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:610  POST https://277e5bf1-9b67-405a-ab94-816a93a86842-00-31384xxtk9d6l.worf.replit.dev/api/compress 400 (Bad Request)
+(anonymous) @ premium-compress.tsx:610
+(anonymous) @ premium-compress.tsx:672
+setTimeout
+(anonymous) @ premium-compress.tsx:671
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=a983dbeb:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=a983dbeb:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=a983dbeb:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=a983dbeb:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=a983dbeb:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=a983dbeb:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=a983dbeb:19447
+commitRootImpl @ chunk-RPCDYKBN.js?v=a983dbeb:19416
+commitRoot @ chunk-RPCDYKBN.js?v=a983dbeb:19277
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=a983dbeb:18895
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=a983dbeb:9119
+flushSync @ chunk-RPCDYKBN.js?v=a983dbeb:18959
+finishEventHandler @ chunk-RPCDYKBN.js?v=a983dbeb:3569
+batchedUpdates @ chunk-RPCDYKBN.js?v=a983dbeb:3582
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=a983dbeb:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=a983dbeb:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=a983dbeb:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=a983dbeb:5449Understand this error
+premium-compress.tsx:649 Compression error: Error: HTTP error! status: 400
+    at premium-compress.tsx:616:15
+(anonymous) @ premium-compress.tsx:649
+await in (anonymous)
+(anonymous) @ premium-compress.tsx:672
+setTimeout
+(anonymous) @ premium-compress.tsx:671
+commitHookEffectListMount @ chunk-RPCDYKBN.js?v=a983dbeb:16915
+commitPassiveMountOnFiber @ chunk-RPCDYKBN.js?v=a983dbeb:18156
+commitPassiveMountEffects_complete @ chunk-RPCDYKBN.js?v=a983dbeb:18129
+commitPassiveMountEffects_begin @ chunk-RPCDYKBN.js?v=a983dbeb:18119
+commitPassiveMountEffects @ chunk-RPCDYKBN.js?v=a983dbeb:18109
+flushPassiveEffectsImpl @ chunk-RPCDYKBN.js?v=a983dbeb:19490
+flushPassiveEffects @ chunk-RPCDYKBN.js?v=a983dbeb:19447
+commitRootImpl @ chunk-RPCDYKBN.js?v=a983dbeb:19416
+commitRoot @ chunk-RPCDYKBN.js?v=a983dbeb:19277
+performSyncWorkOnRoot @ chunk-RPCDYKBN.js?v=a983dbeb:18895
+flushSyncCallbacks @ chunk-RPCDYKBN.js?v=a983dbeb:9119
+flushSync @ chunk-RPCDYKBN.js?v=a983dbeb:18959
+finishEventHandler @ chunk-RPCDYKBN.js?v=a983dbeb:3569
+batchedUpdates @ chunk-RPCDYKBN.js?v=a983dbeb:3582
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=a983dbeb:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=a983dbeb:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=a983dbeb:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=a983dbeb:5449Understand this error
+premium-compress.tsx:292 Subscription loading state: false
+premium-compress.tsx:293 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
+premium-compress.tsx:292 Subscription loading state: false
+premium-compress.tsx:293 Subscription data summary: {isLoading: false, isPremium: true, subscriptionStatus: 'active'}
