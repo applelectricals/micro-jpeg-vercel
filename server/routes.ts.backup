@@ -1,0 +1,4883 @@
+import type { Express } from "express";
+import express from "express";
+import { createServer, type Server } from "http";
+import { randomUUID } from "crypto";
+import multer from "multer";
+import sharp from "sharp";
+import path from "path";
+import fs from "fs/promises";
+import { createReadStream } from "fs";
+import archiver from "archiver";
+import { exec } from "child_process";
+import { promisify } from "util";
+import { storage } from "./storage";
+import { emailService } from "./emailService";
+import { insertCompressionJobSchema, specialFormatTrials, creditPurchases, users, type SpecialFormatTrial } from "@shared/schema";
+import { z } from "zod";
+import CompressionEngine from "./compressionEngine";
+import { db } from "./db";
+import { and, eq, gt, sql } from "drizzle-orm";
+import { compressToTargetSize, generateOptimizationInsights } from "./compressionUtils";
+import { calculateQualityMetrics } from "./qualityAssessment";
+import { CREDIT_PACKAGES } from "./tierConfig";
+import { isAuthenticated } from "./auth";
+
+// Process a single compression job with advanced settings
+async function processCompressionJob(
+  jobId: string, 
+  originalPath: string, 
+  originalFilename: string, 
+  settings: any, 
+  userId: string | null, 
+  sessionId: string
+) {
+  try {
+    const outputExtension = settings.outputFormat === 'keep-original' 
+      ? originalFilename.split('.').pop()?.toLowerCase() || 'jpg'
+      : settings.outputFormat === 'jpeg' ? 'jpg' : settings.outputFormat;
+    
+    const outputPath = path.join("compressed", `${jobId}.${outputExtension}`);
+    
+    // Get quality from settings
+    const quality = settings.customQuality || 75;
+    const outputFormat = settings.outputFormat === 'keep-original' 
+      ? originalFilename.split('.').pop()?.toLowerCase() || 'jpeg'
+      : settings.outputFormat;
+    
+    console.log(`Processing job ${jobId}: outputFormat=${outputFormat}, outputExtension=${outputExtension}, quality=${quality}`);
+    
+    // Use the compression engine with advanced settings
+    const result = await CompressionEngine.compressWithAdvancedSettings(
+      originalPath,
+      outputPath,
+      quality,
+      outputFormat as 'jpeg' | 'webp' | 'avif' | 'png',
+      {
+        compressionAlgorithm: settings.compressionAlgorithm || 'standard',
+        progressive: settings.progressiveJpeg || false,
+        optimizeScans: settings.optimizeScans || false,
+        arithmeticCoding: settings.arithmeticCoding || false,
+        webOptimized: settings.optimizeForWeb !== false
+      }
+    );
+    
+    // Get original file size
+    const originalStats = await fs.stat(originalPath);
+    const compressionRatio = Math.round(((originalStats.size - result.finalSize) / originalStats.size) * 100);
+    
+    // Update job with completion data
+    await storage.updateCompressionJob(jobId, {
+      status: "completed",
+      compressedSize: result.finalSize,
+      compressionRatio,
+      compressedPath: outputPath,
+      qualityLevel: quality.toString(),
+      outputFormat: outputFormat,
+      completedAt: new Date()
+    });
+    
+    console.log(`Successfully processed job ${jobId}: ${originalStats.size} → ${result.finalSize} bytes (${compressionRatio}% reduction)`);
+    
+  } catch (error) {
+    console.error(`Failed to process job ${jobId}:`, error);
+    await storage.updateCompressionJob(jobId, {
+      status: "failed",
+      errorMessage: `Processing failed: ${error.message}`
+    });
+  }
+}
+import { setupAuth, isAuthenticated } from "./replitAuth";
+import { hashPassword, verifyPassword } from "./auth";
+import { loginSchema, signupSchema, type LoginInput, type SignupInput } from "@shared/schema";
+import { getTierConfig, getUserTier, checkFeatureAccess, checkFileLimit, checkFormatSupport, TIER_CONFIGS, CREDIT_PACKAGES, type CreditPackage } from "./tierConfig";
+import { UsageTracker } from "./usageTracker";
+import { getUsageStats, checkOperationAllowed, recordOperation, UnifiedOperationCounter } from "./unifiedOperationCounter";
+import { getUnifiedPlan, checkFormatAccess } from "./unifiedPlanConfig";
+import Stripe from "stripe";
+import { apiRouter } from "./apiRoutes";
+import { apiSubscriptionRouter } from "./apiSubscriptionRoutes";
+import { webhookRouter } from "./webhooks";
+import { apiManagementRouter } from "./apiManagement";
+import { apiDocsRouter } from "./apiDocs";
+import { creditPurchases, users, type InsertCreditPurchase } from "@shared/schema";
+
+// Initialize Stripe
+if (!process.env.STRIPE_SECRET_KEY) {
+  throw new Error('Missing required Stripe secret: STRIPE_SECRET_KEY');
+}
+const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
+  apiVersion: "2025-07-30.basil",
+});
+
+// Configure multer for file uploads with dynamic limits
+const upload = multer({
+  dest: "uploads/",
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB limit (increased for Premium users)
+  },
+  fileFilter: (req, file, cb) => {
+    // Check format access based on user plan using unified configuration
+    const user = req.user;
+    const planId = user ? 'free' : 'anonymous';
+    const fileExtension = file.originalname.split('.').pop()?.toLowerCase() || '';
+    
+    const formatCheck = checkFormatAccess(planId, fileExtension);
+    if (formatCheck.allowed) {
+      cb(null, true);
+    } else {
+      cb(new Error(formatCheck.message || 'File format not supported'));
+    }
+  },
+});
+
+// Configure multer for special format uploads (RAW, SVG, TIFF)
+const specialUpload = multer({
+  dest: "uploads/",
+  limits: {
+    fileSize: 50 * 1024 * 1024, // 50MB limit for special formats (free trial)
+  },
+  fileFilter: (req, file, cb) => {
+    // Special formats: JPG, PNG, RAW (ARW, CR2, DNG, NEF), SVG, TIFF
+    const specialAllowedTypes = [
+      'image/jpeg', 'image/jpg', 'image/png',
+      'image/tiff', 'image/svg+xml',
+      'image/x-adobe-dng', 'image/x-canon-cr2',
+      'image/x-nikon-nef', 'image/x-sony-arw'
+    ];
+    
+    const fileName = file.originalname.toLowerCase();
+    const hasValidExtension = 
+      fileName.endsWith('.jpg') || fileName.endsWith('.jpeg') || fileName.endsWith('.png') ||
+      fileName.endsWith('.tiff') || fileName.endsWith('.tif') || fileName.endsWith('.svg') ||
+      fileName.endsWith('.dng') || fileName.endsWith('.cr2') ||
+      fileName.endsWith('.nef') || fileName.endsWith('.arw');
+    
+    console.log(`Special upload: ${file.originalname}, MIME: ${file.mimetype}, Valid extension: ${hasValidExtension}`);
+    
+    if (specialAllowedTypes.includes(file.mimetype) || hasValidExtension) {
+      cb(null, true);
+    } else {
+      cb(new Error('Only JPG, PNG, RAW (ARW, CR2, DNG, NEF), SVG, and TIFF files are allowed for special format conversions'));
+    }
+  },
+});
+
+// Ensure directories exist
+async function ensureDirectories() {
+  try {
+    await fs.mkdir("uploads", { recursive: true });
+    await fs.mkdir("compressed", { recursive: true });
+  } catch (error) {
+    console.log("Directories already exist or created successfully");
+  }
+}
+
+export async function registerRoutes(app: Express): Promise<Server> {
+  await ensureDirectories();
+  
+  // Setup authentication middleware first
+  await setupAuth(app);
+
+  // Register API v1 routes
+  app.use('/api/v1', apiRouter);
+  
+  // Register API management routes (for web interface)
+  app.use('/api', apiManagementRouter);
+  
+  // Register API subscription routes
+  app.use('/api/subscriptions', apiSubscriptionRouter);
+  
+  // Register webhook routes (must be before body parsing middleware)
+  app.use('/webhooks', express.raw({ type: 'application/json' }), webhookRouter);
+  
+  // Register API documentation
+  app.use('/api/v1', apiDocsRouter);
+
+  // WordPress Plugin Download Route
+  app.get('/api/download/wordpress-plugin', (req, res) => {
+    const pluginPath = path.join(process.cwd(), 'micro-jpeg-api-wordpress-plugin.zip');
+    
+    // Check if plugin file exists
+    fs.access(pluginPath)
+      .then(() => {
+        res.setHeader('Content-Type', 'application/zip');
+        res.setHeader('Content-Disposition', 'attachment; filename="micro-jpeg-api-wordpress-plugin.zip"');
+        
+        const fileStream = createReadStream(pluginPath);
+        fileStream.pipe(res);
+      })
+      .catch(() => {
+        res.status(404).json({ error: 'WordPress plugin not found' });
+      });
+  });
+
+  // Upload-only endpoint - stores files without compression
+  app.post("/api/upload", upload.array('files', 20), async (req, res) => {
+    try {
+      const files = req.files as Express.Multer.File[];
+      if (!files || files.length === 0) {
+        return res.status(400).json({ error: "No files uploaded" });
+      }
+
+      // Check if user is authenticated
+      const isUserAuthenticated = req.isAuthenticated && req.isAuthenticated();
+      const user = isUserAuthenticated ? req.user : null;
+      const sessionId = req.body.sessionId || req.sessionID;
+      const userId = user?.id || null;
+      
+      // Get user tier configuration
+      const userTier = getUserTier(user);
+      
+      // Check file size limits - DISABLED for testing
+      // for (const file of files) {
+      //   const fileSizeCheck = checkFileLimit(user, file.size);
+      //   if (!fileSizeCheck.allowed) {
+      //     return res.status(400).json({ 
+      //       error: "File size limit exceeded", 
+      //       message: fileSizeCheck.message,
+      //       userTier: userTier.displayName,
+      //       maxFileSize: fileSizeCheck.limit
+      //     });
+      //   }
+      // }
+      
+      // Check batch limits (max 20 files for all users)
+      if (files.length > 20) {
+        return res.status(400).json({ 
+          error: "Batch size limit exceeded", 
+          message: "Maximum 20 files per batch",
+          userTier: userTier.displayName 
+        });
+      }
+
+      // Create jobs with 'uploaded' status (not processed yet)
+      const results = [];
+      console.log(`Creating ${files.length} upload jobs for user ${userId || 'guest'}`);
+
+      for (const file of files) {
+        try {
+          const jobId = randomUUID();
+          const originalPath = file.path; // Multer stores the file
+          
+          // Get original format from file extension
+          const originalFormat = file.originalname.split('.').pop()?.toLowerCase() || 'unknown';
+          
+          // Create job entry for uploaded file (not compressed yet)
+          const job = await storage.createCompressionJob({
+            userId,
+            sessionId,
+            originalFilename: file.originalname,
+            originalSize: file.size,
+            originalPath,
+            originalFormat,
+            status: 'uploaded', // New status for uploaded but not processed
+            compressionSettings: null, // Will be set when processing
+          });
+
+          results.push({
+            id: job.id,
+            originalName: file.originalname,
+            originalSize: file.size,
+            status: 'uploaded'
+          });
+          
+          console.log(`Created upload job ${job.id} for file ${file.originalname}`);
+        } catch (error) {
+          console.error(`Failed to create upload job for ${file.originalname}:`, error);
+          return res.status(500).json({ 
+            error: `Failed to upload ${file.originalname}: ${error.message}` 
+          });
+        }
+      }
+
+      res.json({ 
+        results,
+        message: `Successfully uploaded ${files.length} file${files.length > 1 ? 's' : ''}. Use advanced settings to process them.`
+      });
+    } catch (error) {
+      console.error("Upload error:", error);
+      res.status(500).json({ error: "Failed to upload files" });
+    }
+  });
+
+  // Process uploaded files endpoint - processes already uploaded files with settings
+  app.post("/api/process", async (req, res) => {
+    // Set timeout based on user plan
+    const isUserAuthenticated = req.isAuthenticated && req.isAuthenticated();
+    const user = isUserAuthenticated ? req.user : null;
+    const planLimits = user ? getUnifiedPlan('free') : getUnifiedPlan('anonymous');
+    const timeoutMs = planLimits.limits.processingTimeout * 1000;
+    req.setTimeout(timeoutMs);
+    res.setTimeout(timeoutMs);
+    
+    try {
+      const { jobIds, settings } = req.body;
+      
+      if (!jobIds || !Array.isArray(jobIds) || jobIds.length === 0) {
+        return res.status(400).json({ error: "No job IDs provided" });
+      }
+      
+      console.log('Compression settings received:', settings);
+      
+      const isUserAuthenticated = req.isAuthenticated && req.isAuthenticated();
+      const user = isUserAuthenticated ? req.user : null;
+      const sessionId = req.sessionID;
+      const userId = user?.id || null;
+      
+      // Get jobs to process
+      const jobs = await storage.getJobsByIds(jobIds);
+      
+      if (jobs.length === 0) {
+        return res.status(404).json({ error: "No valid jobs found to process" });
+      }
+      
+      // Check usage limits for compressions
+      for (const job of jobs) {
+        const usageCheck = await UsageTracker.checkLimit(user, req, 1, false);
+        if (!usageCheck.allowed) {
+          return res.status(429).json({
+            error: "Usage limit exceeded",
+            message: usageCheck.message || "You have reached your compression limit",
+            usage: usageCheck.usage
+          });
+        }
+      }
+      
+      const results = [];
+      
+      for (const job of jobs) {
+        try {
+          // Update job status to processing
+          await storage.updateCompressionJob(job.id, { 
+            status: 'processing',
+            compressionSettings: settings 
+          });
+          
+          // Start async compression and wait for it to complete
+          await processCompressionJob(job.id, job.originalPath, job.originalFilename, settings, userId, sessionId);
+          
+          // Get the updated job status after compression
+          const updatedJob = await storage.getCompressionJob(job.id);
+          
+          results.push({
+            id: job.id,
+            status: updatedJob?.status || 'completed',
+            originalName: job.originalFilename
+          });
+          
+        } catch (error) {
+          console.error(`Failed to start processing job ${job.id}:`, error);
+          await storage.updateCompressionJob(job.id, { 
+            status: 'failed',
+            errorMessage: `Processing failed: ${error.message}`
+          });
+        }
+      }
+      
+      res.json({ 
+        results,
+        message: `Started processing ${results.length} file${results.length > 1 ? 's' : ''}`
+      });
+      
+    } catch (error) {
+      console.error("Process error:", error);
+      res.status(500).json({ error: "Failed to process files" });
+    }
+  });
+
+  // Compression endpoint for both guest and authenticated users  
+  app.post("/api/compress", upload.array('files', 20), async (req, res) => {
+    try {
+      const files = req.files as Express.Multer.File[];
+      if (!files || files.length === 0) {
+        return res.status(400).json({ error: "No files uploaded" });
+      }
+
+      // Check if user is authenticated
+      const isUserAuthenticated = req.isAuthenticated && req.isAuthenticated();
+      const user = isUserAuthenticated ? req.user : null;
+      
+      // Get user tier configuration
+      const userTier = getUserTier(user);
+      
+      // Check file size limits
+      for (const file of files) {
+        const fileSizeCheck = checkFileLimit(user, file.size);
+        if (!fileSizeCheck.allowed) {
+          return res.status(400).json({ 
+            error: "File size limit exceeded", 
+            message: fileSizeCheck.message,
+            userTier: userTier.displayName,
+            maxFileSize: fileSizeCheck.limit
+          });
+        }
+      }
+      
+      // Check batch limits (max 20 files for all users)
+      if (files.length > 20) {
+        return res.status(400).json({ 
+          error: "Batch size limit exceeded", 
+          message: "Maximum 20 files per batch",
+          userTier: userTier.displayName 
+        });
+      }
+
+      // Check usage limits for compressions
+      let totalOperations = files.length; // Start with compression operations
+      for (const file of files) {
+        const fileSizeMB = file.size / (1024 * 1024);
+        const usageCheck = await UsageTracker.checkLimit(user, req, 1, false);
+        if (!usageCheck.allowed) {
+          return res.status(429).json({
+            error: "Credits exhausted",
+            message: usageCheck.message || "You have reached your free credit limit",
+            usage: usageCheck.usage,
+            userTier: userTier.displayName,
+            creditsExhausted: true,
+            creditsNeeded: 1, // Minimum credits needed for this operation
+            upgradeRequired: true, // Legacy field for backward compatibility
+            creditsUsed: usageCheck.usage.currentCredits / 100, // Convert from cents
+            availablePlans: [
+              {
+                id: 'payperuse',
+                name: 'Pay Per Use',
+                price: '$0.025 per credit'
+              },
+              {
+                id: 'starter',
+                name: 'Starter Pack',
+                price: '$9.99 for 500 credits'
+              },
+              {
+                id: 'pro',
+                name: 'Pro Pack',
+                price: '$49.99 for 3000 credits'
+              }
+            ]
+          });
+        }
+      }
+
+      // Parse compression settings from request
+      let settings = {
+        quality: 80, // Higher quality to avoid over-compression
+        outputFormat: 'keep-original',
+        resizeOption: 'keep-original',
+        compressionAlgorithm: 'standard',
+        webOptimization: 'optimize-web'
+      };
+
+      if (req.body.settings) {
+        try {
+          settings = { ...settings, ...JSON.parse(req.body.settings) };
+        } catch (e) {
+          console.log("Failed to parse settings, using defaults");
+        }
+      }
+
+      // Apply Free user optimizations for speed
+      if (!user) { // Guest/Free user
+        // Maintain quality but optimize algorithm for speed instead
+        settings.compressionAlgorithm = 'standard'; // Use standard instead of aggressive compression
+      }
+
+      const results = [];
+      const jobs = [];
+      
+      console.log("Compression settings received:", settings);
+      console.log("Files to process:", files.map(f => ({ name: f.originalname, ext: f.originalname.split('.').pop() })));
+      console.log("=== PROCESSING FILES WITH SHARP + IMAGEMAGICK ===");
+      
+      // Create database jobs for each file and format combination
+      for (const file of files) {
+        // Handle multiple output formats
+        const fileExtension = file.originalname.split('.').pop()?.toLowerCase() || 'jpg';
+        console.log(`File: ${file.originalname}, extension: ${fileExtension}, settings.outputFormat: ${settings.outputFormat}`);
+        
+        let outputFormats = Array.isArray(settings.outputFormat) 
+          ? settings.outputFormat 
+          : settings.outputFormat === 'keep-original' 
+            ? [fileExtension] 
+            : [settings.outputFormat];
+            
+        console.log(`Determined outputFormats: [${outputFormats.join(', ')}]`);
+
+        // Create a separate job for each format
+        console.log(`File: ${file.originalname}, outputFormats array: [${outputFormats.join(', ')}], settings.outputFormat: ${settings.outputFormat}`);
+        for (const outputFormat of outputFormats) {
+          // Check for duplicates - skip if same file/format combination already exists in session
+          const existingJob = await storage.findExistingJob(
+            user?.id || null,
+            req.sessionID,
+            file.originalname,
+            outputFormat
+          );
+          
+          if (existingJob) {
+            console.log(`Skipping duplicate job for ${file.originalname} -> ${outputFormat} (existing job: ${existingJob.id})`);
+            // Add the existing job to our jobs array to include it in results
+            jobs.push({ job: existingJob, file, outputFormat });
+            continue;
+          }
+          
+          console.log(`Creating compression job for user ${user?.id}, file: ${file.originalname}, format: ${outputFormat}`);
+          const job = await storage.createCompressionJob({
+            userId: user?.id || null,
+            sessionId: req.sessionID, // For guest users
+            originalFilename: file.originalname,
+            originalSize: file.size,
+            status: "pending",
+            qualityLevel: "custom",
+            resizeOption: settings.resizeOption,
+            outputFormat: outputFormat,
+            originalPath: file.path,
+            originalFormat: file.mimetype.split('/')[1], // Add required field
+            compressedSize: null,
+            compressionRatio: null,
+            errorMessage: null,
+            compressedPath: null,
+          });
+          
+          console.log(`Created job ${job.id} for user ${user?.id || 'guest'}`);
+          jobs.push({ job, file, outputFormat });
+        }
+      }
+      
+      // Process jobs and update them
+      for (const { job, file, outputFormat } of jobs) {
+        try {
+          // PNG conversion is now enabled for all users including free users
+          // Leveraging our optimized compression engine for fast processing
+          
+          // Map format names to proper file extensions
+          const getFileExtension = (format: string) => {
+            switch (format) {
+              case 'jpeg':
+              case 'jpg': return 'jpg';
+              case 'png': return 'png';
+              case 'webp': return 'webp';
+              case 'avif': return 'avif';
+              case 'tiff': return 'tiff';
+              case 'dng': return 'dng';
+              case 'cr2': return 'cr2';
+              case 'nef': return 'nef';
+              case 'arw': return 'arw';
+              case 'orf': return 'orf';
+              case 'raf': return 'raf';
+              case 'rw2': return 'rw2';
+              default: return format;
+            }
+          };
+          
+          const fileExtension = getFileExtension(outputFormat);
+          const outputPath = path.join("compressed", `${job.id}.${fileExtension}`);
+          
+          console.log(`Processing ${file.originalname} -> ${outputFormat.toUpperCase()} (parallel)`);
+          
+          // Check if this is a RAW file that needs special processing
+          const inputFormat = getFileFormat(file.originalname);
+          const fileExtName = file.originalname.split('.').pop()?.toLowerCase() || '';
+          const isRawFile = ['dng', 'cr2', 'nef', 'arw', 'orf', 'raf', 'rw2'].includes(fileExtName);
+          console.log(`File: ${file.originalname}, inputFormat: ${inputFormat}, fileExt: ${fileExtName}, isRawFile: ${isRawFile}`);
+          
+          let result;
+          if (isRawFile || inputFormat === 'svg' || inputFormat === 'tiff') {
+            // Use the EXACT same engine as /professional-formats/convert
+            console.log(`Using professional formats conversion engine for ${file.originalname} -> ${outputFormat}`);
+            try {
+              result = await processSpecialFormatConversion(
+                file.path,
+                outputPath,
+                isRawFile ? 'raw' : fileExtName, // Professional formats engine expects 'raw' for all RAW files
+                outputFormat,
+                {
+                  quality: settings.quality,
+                  resize: false, // Keep full resolution for proper 5MB files
+                  width: 2560,
+                  height: 2560,
+                  maintainAspect: true
+                }
+              );
+              console.log(`RAW conversion result:`, result);
+            } catch (error) {
+              console.error(`RAW conversion failed for ${file.originalname}:`, error);
+              throw error; // Re-throw to be caught by the outer error handler
+            }
+          } else {
+            // Use Sharp for standard image formats (JPEG, PNG, WEBP, etc.) - much faster
+            const sharpOperation = sharp(file.path)
+              .toFormat(outputFormat as keyof sharp.FormatEnum, {
+                quality: settings.quality,
+                ...(outputFormat === 'png' && { compressionLevel: 8 }),
+                ...(outputFormat === 'webp' && { effort: 4 }),
+                ...(outputFormat === 'avif' && { effort: 2 }) // Faster AVIF processing
+              })
+              .toFile(outputPath);
+            
+            // Apply 30-second timeout
+            await Promise.race([
+              sharpOperation,
+              new Promise((_, reject) => 
+                setTimeout(() => reject(new Error(`Processing timeout after 30 seconds for ${outputFormat}`)), 30000)
+              )
+            ]);
+            
+            const stats = await fs.stat(outputPath);
+            result = { success: true, outputSize: stats.size };
+          }
+          
+          // Get file stats
+          const originalStats = await fs.stat(file.path);
+          const compressedStats = await fs.stat(outputPath);
+          // Calculate compression ratio using original file size
+          const compressionRatio = Math.round((1 - compressedStats.size / originalStats.size) * 100);
+          
+          // Update job with compression results - wrap in try/catch to prevent database crashes
+          try {
+            await storage.updateCompressionJob(job.id, {
+              status: "completed",
+              compressedPath: outputPath,
+              compressedSize: compressedStats.size,
+              compressionRatio: compressionRatio,
+              outputFormat: outputFormat, // Store the actual output format
+            });
+          } catch (dbError) {
+            console.error(`Database update failed for job ${job.id}:`, dbError);
+            // Continue processing even if database update fails
+          }
+
+          const resultData = {
+            id: job.id, // Use actual job ID
+            originalName: file.originalname,
+            originalSize: originalStats.size,
+            compressedSize: compressedStats.size,
+            compressionRatio,
+            downloadUrl: `/api/download/${job.id}`,
+            originalFormat: file.mimetype.split('/')[1].toUpperCase(),
+            outputFormat: outputFormat.toUpperCase(),
+            wasConverted: settings.outputFormat !== 'keep-original',
+            compressedFileName: path.basename(outputPath),
+            settings: {
+              quality: settings.quality,
+              outputFormat: settings.outputFormat,
+              resizeOption: settings.resizeOption,
+              compressionAlgorithm: settings.compressionAlgorithm || 'standard',
+              webOptimization: settings.webOptimization || 'optimize-web'
+            }
+          };
+
+          console.log(`${outputFormat.toUpperCase()} compression result for ${file.originalname}:`, {
+            size: `${originalStats.size} -> ${compressedStats.size}`,
+            ratio: `${compressionRatio}%`,
+            quality: result?.qualityUsed || settings.quality // Use actual quality used
+          });
+          results.push(resultData);
+          
+        } catch (jobError) {
+          console.error(`Error compressing ${file.originalname} to ${outputFormat}:`, jobError);
+          // Update job with error - wrap in try/catch to prevent secondary crashes
+          try {
+            await storage.updateCompressionJob(job.id, {
+              status: "failed",
+              errorMessage: jobError instanceof Error ? jobError.message : "Compression failed",
+            });
+          } catch (dbError) {
+            console.error(`Database update failed for failed job ${job.id}:`, dbError);
+          }
+          
+          results.push({
+            id: job.id,
+            originalName: file.originalname,
+            error: "Compression failed"
+          });
+        }
+      }
+      
+      // Clean up original uploaded files (only after processing all formats)
+      const processedFiles = new Set();
+      for (const { file } of jobs) {
+        if (!processedFiles.has(file.path)) {
+          try {
+            await fs.unlink(file.path);
+            processedFiles.add(file.path);
+          } catch (unlinkError) {
+            console.log(`Could not clean up ${file.path}:`, unlinkError);
+          }
+        }
+      }
+      
+      // Track usage for successful compressions
+      const successfulJobs = results.filter(r => !r.error);
+      if (successfulJobs.length > 0) {
+        // Calculate file size for credit tracking (based on unique files, not total processed size)
+        const uniqueFiles = new Map();
+        successfulJobs.forEach(result => {
+          if (!uniqueFiles.has(result.originalName)) {
+            uniqueFiles.set(result.originalName, result.originalSize / (1024 * 1024));
+          }
+        });
+        const totalFileSizeMB = Array.from(uniqueFiles.values()).reduce((sum, size) => sum + size, 0);
+        
+        // Track usage and deduct credits - check if this is conversion (different output formats)
+        const uploadedFiles = [...new Set(jobs.map(job => job.file.originalname))];
+        const isConversion = jobs.some(job => {
+          const originalExt = path.extname(job.file.originalname).toLowerCase();
+          const outputExt = job.outputFormat === 'jpeg' ? '.jpg' : `.${job.outputFormat}`;
+          return originalExt !== outputExt;
+        });
+        
+        // Track each successful operation using unified counter
+        for (const result of successfulJobs) {
+          const fileExtension = path.extname(result.originalName).toLowerCase();
+          const operationType = isConversion ? 'conversion' : 'compression';
+          
+          await recordOperation({
+            userId: user?.id || req.session?.userId,
+            sessionId: user?.id || req.session?.userId ? undefined : UnifiedOperationCounter.generateAnonymousSessionId(req),
+            operationType,
+            fileFormat: fileExtension.substring(1) || 'unknown',
+            fileSizeMb: result.originalSize / (1024 * 1024),
+            interface: 'web',
+            req
+          });
+        }
+        console.log(`Tracked operations: ${successfulJobs.length} ${isConversion ? 'conversions' : 'compressions'}, ${totalFileSizeMB.toFixed(2)}MB`);
+      }
+      
+      // Generate batch ID and store file list for ZIP download
+      const batchId = randomUUID();
+      const successfulFiles = results
+        .filter(r => !r.error && r.compressedFileName)
+        .map(r => r.compressedFileName);
+      
+      // Store batch info in memory (you could use Redis in production)
+      global.batchFiles = global.batchFiles || {};
+      global.batchFiles[batchId] = {
+        files: successfulFiles,
+        timestamp: Date.now()
+      };
+      
+      res.json({ 
+        results,
+        batchId: batchId,
+        batchDownloadUrl: `/api/download-zip/${batchId}`
+      });
+      
+    } catch (error) {
+      console.error("Compression error:", error);
+      res.status(500).json({ error: "Compression failed" });
+    }
+  });
+
+  // Download endpoint for compressed files by job ID
+  app.get("/api/download/compressed/:jobId", async (req, res) => {
+    try {
+      const jobId = req.params.jobId;
+      const job = await storage.getCompressionJob(jobId);
+      
+      if (!job || !job.compressedPath || job.status !== "completed") {
+        return res.status(404).json({ error: "Compressed file not found" });
+      }
+      
+      // Check if file exists
+      await fs.access(job.compressedPath);
+      
+      // Generate a user-friendly filename
+      const originalName = job.originalFilename;
+      const extension = path.extname(job.compressedPath);
+      const baseName = path.parse(originalName).name;
+      const downloadName = `${baseName}_compressed${extension}`;
+      
+      // Set proper headers for download
+      res.setHeader('Content-Disposition', `attachment; filename="${downloadName}"`);
+      res.setHeader('Content-Type', 'application/octet-stream');
+      
+      res.download(job.compressedPath, downloadName, (err) => {
+        if (err) {
+          console.error("Download error:", err);
+          if (!res.headersSent) {
+            res.status(404).json({ error: "File not found" });
+          }
+        }
+      });
+    } catch (error) {
+      console.error("File access error:", error);
+      res.status(404).json({ error: "File not found" });
+    }
+  });
+
+  // Image serving endpoint for thumbnails (no attachment headers)
+  app.get("/api/image/:jobId", async (req, res) => {
+    try {
+      const jobId = req.params.jobId;
+      const job = await storage.getCompressionJob(jobId);
+      
+      if (!job || !job.compressedPath || job.status !== "completed") {
+        return res.status(404).json({ error: "Image not found" });
+      }
+      
+      // Check if file exists
+      await fs.access(job.compressedPath);
+      
+      // Determine content type based on file extension
+      const extension = path.extname(job.compressedPath).toLowerCase();
+      let contentType = 'image/jpeg'; // default
+      switch (extension) {
+        case '.png': contentType = 'image/png'; break;
+        case '.webp': contentType = 'image/webp'; break;
+        case '.avif': contentType = 'image/avif'; break;
+        case '.tiff': case '.tif': contentType = 'image/tiff'; break;
+        case '.jpg': case '.jpeg': contentType = 'image/jpeg'; break;
+        default: contentType = 'image/jpeg';
+      }
+      
+      // Set proper headers for image display (not download)
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'public, max-age=3600'); // Cache for 1 hour
+      
+      // Send the file directly
+      res.sendFile(path.resolve(job.compressedPath));
+    } catch (error) {
+      console.error("Image serving error:", error);
+      res.status(404).json({ error: "Image not found" });
+    }
+  });
+
+  // ZIP download endpoint
+  app.get("/api/download-zip/:batchId", async (req, res) => {
+    try {
+      const batchId = req.params.batchId;
+      const compressedDir = "compressed";
+      
+      // Get batch info from memory
+      global.batchFiles = global.batchFiles || {};
+      const batchInfo = global.batchFiles[batchId];
+      
+      if (!batchInfo) {
+        return res.status(404).json({ error: "Batch not found or expired" });
+      }
+      
+      // Check if batch is still valid (within 24 hours for better UX)
+      const twentyFourHoursAgo = Date.now() - (24 * 60 * 60 * 1000);
+      if (batchInfo.timestamp < twentyFourHoursAgo) {
+        delete global.batchFiles[batchId];
+        return res.status(404).json({ error: "Batch expired" });
+      }
+      
+      const validFiles = [];
+      
+      // Only include files from this specific batch
+      for (const filename of batchInfo.files) {
+        try {
+          const filePath = path.join(compressedDir, filename);
+          await fs.access(filePath);
+          validFiles.push({
+            name: filename,
+            path: filePath
+          });
+        } catch (err) {
+          console.log(`File ${filename} not found, skipping`);
+        }
+      }
+      
+      if (validFiles.length === 0) {
+        return res.status(404).json({ error: "No files found for download" });
+      }
+      
+      console.log(`Creating ZIP for batch ${batchId} with ${validFiles.length} files:`, validFiles.map(f => f.name));
+      
+      // Set response headers for ZIP download
+      const zipFilename = `compressed_images_${batchId.slice(0, 8)}.zip`;
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${zipFilename}"`);
+      
+      // Create zip archive
+      const archive = archiver('zip', {
+        zlib: { level: 9 } // Best compression
+      });
+      
+      // Handle archive errors
+      archive.on('error', (err) => {
+        console.error('Archive error:', err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Failed to create archive' });
+        }
+      });
+      
+      // Pipe archive to response
+      archive.pipe(res);
+      
+      // Add files to archive with clean names
+      for (const file of validFiles) {
+        try {
+          await fs.access(file.path);
+          // Use clean filename without timestamp prefix
+          const cleanName = file.name.replace(/^compressed_\d+_/, '');
+          archive.file(file.path, { name: cleanName });
+        } catch (err) {
+          console.error(`Failed to add file ${file.name} to archive:`, err);
+        }
+      }
+      
+      // Finalize the archive
+      await archive.finalize();
+      
+      // Note: Batch info cleanup is handled by the 24-hour expiration check
+      // No immediate cleanup to allow multiple downloads of the same ZIP
+      
+    } catch (error) {
+      console.error("ZIP download error:", error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Failed to create ZIP archive" });
+      }
+    }
+  });
+
+  // Auth routes
+  app.get('/api/auth/user', async (req, res) => {
+    console.log("GET /api/auth/user called");
+    console.log("Session ID:", req.sessionID);
+    console.log("Session userId:", req.session.userId);
+    console.log("Session data:", JSON.stringify(req.session, null, 2));
+    
+    if (!req.session.userId) {
+      console.log("No userId in session, returning 401");
+      return res.status(401).json({ message: "Unauthorized" });
+    }
+
+    try {
+      const user = await storage.getUser(req.session.userId);
+      if (!user) {
+        console.log("User not found in database, destroying session");
+        req.session.destroy(() => {});
+        return res.status(401).json({ message: "Unauthorized" });
+      }
+
+      console.log("User found:", user.email);
+      req.user = user;
+      
+      // Don't send password in response
+      const { password, ...userWithoutPassword } = user;
+      res.json(userWithoutPassword);
+    } catch (error) {
+      console.error("Authentication error:", error);
+      res.status(401).json({ message: "Unauthorized" });
+    }
+  });
+
+  // Get usage statistics (works for both authenticated and anonymous users)
+  app.get('/api/usage-stats', async (req, res) => {
+    try {
+      const isUserAuthenticated = req.isAuthenticated && req.isAuthenticated();
+      // Handle both session-based and OAuth authentication
+      const userId = isUserAuthenticated && req.user ? req.user.claims?.sub : 
+                     req.session?.userId || undefined;
+      const sessionId = req.headers['x-session-id'] as string;
+      
+      // Get unified operation usage stats
+      const operationStats = await getUsageStats(userId, sessionId, req);
+      
+      // Check for lead magnet credits if user is authenticated
+      let leadMagnetCredits = null;
+      if (isUserAuthenticated && req.user?.email) {
+        try {
+          leadMagnetCredits = await storage.checkLeadMagnetCredits(req.user.email);
+        } catch (error) {
+          console.log("No lead magnet credits found for user");
+        }
+      }
+      
+      // Also get legacy credit stats for backward compatibility during transition
+      const legacyStats = await UsageTracker.getUsageStats(isUserAuthenticated ? req.user : null, req);
+      
+      // Calculate total available operations including lead magnet credits
+      let totalAvailableOperations = operationStats.monthlyUsed;
+      let totalOperationLimit = operationStats.monthlyLimit;
+      let bonusCredits = 0;
+      
+      if (leadMagnetCredits?.hasCredits) {
+        bonusCredits = leadMagnetCredits.creditsRemaining;
+        // Add lead magnet credits to available operations
+        totalOperationLimit = (operationStats.monthlyLimit || 0) + leadMagnetCredits.creditsGranted;
+      }
+      
+      // Return unified stats with operation-based structure
+      const unifiedStats = {
+        // New unified operation structure
+        operations: {
+          used: operationStats.monthlyUsed,
+          limit: totalOperationLimit,
+          remaining: totalOperationLimit ? Math.max(0, totalOperationLimit - operationStats.monthlyUsed) : null,
+          planId: operationStats.planId,
+          planName: operationStats.planName,
+          isAnonymous: operationStats.isAnonymous,
+          dailyUsed: operationStats.dailyUsed,
+          dailyLimit: operationStats.dailyLimit,
+          hourlyUsed: operationStats.hourlyUsed,
+          hourlyLimit: operationStats.hourlyLimit,
+          // Lead magnet bonus info
+          bonusCredits: bonusCredits,
+          bonusCreditsExpiry: leadMagnetCredits?.expiresAt || null,
+        },
+        
+        // Legacy credit structure for backward compatibility
+        totalCredits: legacyStats.usage?.totalCredits || 0,
+        usedCredits: legacyStats.usage?.usedCredits || 0,
+        remainingCredits: legacyStats.usage?.remainingCredits || 0,
+        freeCredits: legacyStats.usage?.freeCredits || 0,
+        purchasedCredits: legacyStats.usage?.purchasedCredits || 0,
+        
+        // Keep existing structure for now
+        usage: legacyStats.usage
+      };
+      
+      res.json(unifiedStats);
+    } catch (error) {
+      console.error("Error fetching usage stats:", error);
+      res.status(500).json({ message: "Failed to fetch usage statistics" });
+    }
+  });
+
+  // Loyalty program - social share tracking endpoint with rate limiting
+  app.post('/api/loyalty-share', async (req, res) => {
+    try {
+      const { platform, postUrl } = req.body;
+      
+      if (!platform) {
+        return res.status(400).json({ error: "Platform is required" });
+      }
+
+      // Define reward structure
+      const rewards: { [key: string]: number } = {
+        'twitter': 10,
+        'linkedin': 15,
+        'facebook': 10,
+        'instagram': 12,
+        'pinterest': 8,
+        'reddit': 15
+      };
+
+      const operationsToAdd = rewards[platform];
+      if (!operationsToAdd) {
+        return res.status(400).json({ error: "Invalid platform" });
+      }
+
+      // Check if user is authenticated
+      const isUserAuthenticated = req.isAuthenticated && req.isAuthenticated();
+      const userId = isUserAuthenticated && req.user ? req.user.claims?.sub : undefined;
+      const sessionId = req.headers['x-session-id'] as string;
+      const identifier = userId || sessionId;
+
+      if (!identifier) {
+        return res.status(400).json({ error: "Unable to identify user session" });
+      }
+
+      // Rate limiting: Check if user has already claimed reward for this platform today
+      const today = new Date();
+      const dateKey = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, '0')}-${String(today.getDate()).padStart(2, '0')}`;
+      const rateLimitKey = `loyalty_${identifier}_${platform}_${dateKey}`;
+      
+      // Simple in-memory rate limiting (in production, use Redis or database)
+      if (UsageTracker.hasClaimedTodayReward(rateLimitKey)) {
+        return res.status(429).json({ 
+          error: "Daily limit reached", 
+          message: `You can only earn rewards once per day per platform. Try again tomorrow!`,
+          nextClaimTime: "tomorrow"
+        });
+      }
+
+      // Mark this platform as claimed for today
+      UsageTracker.markRewardClaimed(rateLimitKey);
+
+      // If URL provided, store it for future verification
+      if (postUrl) {
+        console.log(`URL verification: User ${identifier} shared on ${platform}: ${postUrl}`);
+        // Store for later verification - in production, add to verification queue
+      }
+
+      // Award operations (works for both authenticated and guest users)
+      await UsageTracker.addBonusOperations(userId, sessionId, operationsToAdd, `Social share on ${platform}`);
+
+      res.json({ 
+        success: true, 
+        operations: operationsToAdd,
+        platform: platform,
+        message: `You earned ${operationsToAdd} bonus operations for sharing on ${platform}!`,
+        nextClaimTime: "tomorrow"
+      });
+
+    } catch (error) {
+      console.error("Loyalty share tracking error:", error);
+      res.status(500).json({ error: "Failed to process loyalty share" });
+    }
+  });
+
+  // Subscription info endpoint
+  app.get('/api/subscription-info', isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user;
+      if (!user) {
+        return res.status(401).json({ message: "User not found" });
+      }
+
+      // Get user's tier configuration
+      const tierConfig = getUserTier(user);
+      
+      // Basic subscription info
+      const subscriptionInfo = {
+        isPremium: user.isPremium || false,
+        subscriptionStatus: user.subscriptionStatus || 'inactive',
+        subscriptionPlan: user.subscriptionPlan || 'free',
+        subscriptionEndDate: user.subscriptionEndDate || null,
+        stripeCustomerId: user.stripeCustomerId || null,
+        stripeSubscriptionId: user.stripeSubscriptionId || null,
+        
+        // Current tier details
+        currentTier: {
+          id: tierConfig.id,
+          name: tierConfig.displayName,
+          description: tierConfig.description,
+          features: tierConfig.features,
+        },
+        
+        // Feature access flags
+        features: {
+          aiRecommendations: tierConfig.limits.allowAiRecommendations,
+          advancedSettings: tierConfig.limits.allowAdvancedSettings,
+          batchDownload: tierConfig.limits.allowBatchDownload,
+          apiAccess: tierConfig.limits.allowApiAccess,
+          priorityProcessing: tierConfig.limits.allowPriorityProcessing,
+          cloudIntegrations: tierConfig.limits.allowCloudIntegrations,
+          customAlgorithms: tierConfig.limits.allowCustomAlgorithms,
+        },
+        
+        // Limits
+        limits: {
+          maxFileSize: tierConfig.limits.maxFileSize,
+          maxFilesPerBatch: tierConfig.limits.maxFilesPerBatch,
+          maxFilesPerDay: tierConfig.limits.maxFilesPerDay,
+          maxFilesPerMonth: tierConfig.limits.maxFilesPerMonth,
+          allowedFormats: tierConfig.limits.allowedFormats,
+          qualityRange: {
+            min: tierConfig.limits.minQuality,
+            max: tierConfig.limits.maxQuality,
+          },
+        },
+        
+        // Available tier upgrades
+        availableTiers: Object.values(TIER_CONFIGS).map(tier => ({
+          id: tier.id,
+          name: tier.displayName,
+          description: tier.description,
+          price: tier.price,
+          features: tier.features,
+          popular: tier.popular || false,
+        })),
+      };
+
+      res.json(subscriptionInfo);
+    } catch (error) {
+      console.error("Error fetching subscription info:", error);
+      res.status(500).json({ message: "Failed to fetch subscription info" });
+    }
+  });
+
+  // Check email availability
+  app.post('/api/auth/check-email', async (req, res) => {
+    try {
+      const { email } = req.body;
+      if (!email) {
+        return res.status(400).json({ message: "Email is required" });
+      }
+      
+      const existingUser = await storage.getUserByEmail(email);
+      res.json({ available: !existingUser });
+    } catch (error) {
+      console.error("Error checking email:", error);
+      res.status(500).json({ message: "Failed to check email" });
+    }
+  });
+
+  // Signup route
+  app.post('/api/auth/signup', async (req, res) => {
+    try {
+      const result = signupSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          errors: result.error.flatten().fieldErrors 
+        });
+      }
+
+      const { email, password, firstName, lastName } = result.data;
+
+      // Check if user already exists
+      const existingUser = await storage.getUserByEmail(email);
+      if (existingUser) {
+        return res.status(400).json({ message: "User already exists with this email" });
+      }
+
+      // Generate email verification token
+      const verificationToken = emailService.generateVerificationToken();
+      const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+      // Hash password
+      const hashedPassword = await hashPassword(password);
+
+      // Create user
+      const user = await storage.createUser({
+        email,
+        password: hashedPassword,
+        firstName,
+        lastName,
+        profileImageUrl: null,
+        isEmailVerified: "false",
+        emailVerificationToken: verificationToken,
+        emailVerificationExpires: verificationExpires,
+        lastLogin: null,
+      });
+
+      // Send verification email
+      try {
+        await emailService.sendVerificationEmail(
+          user.email, 
+          verificationToken, 
+          user.firstName || undefined
+        );
+        console.log(`Verification email sent to ${user.email}`);
+      } catch (emailError) {
+        console.error("Failed to send verification email:", emailError);
+        // Continue with signup even if email fails
+      }
+
+      // Set session
+      req.session.userId = user.id;
+
+      // Update last login
+      await storage.updateUser(user.id, { lastLogin: new Date() });
+
+      // Return user without password
+      const { password: _, ...userWithoutPassword } = user;
+      res.status(201).json({ 
+        user: userWithoutPassword,
+        message: "Account created successfully. Please check your email to verify your account."
+      });
+    } catch (error) {
+      console.error("Error during signup:", error);
+      res.status(500).json({ message: "Failed to create account" });
+    }
+  });
+
+  // Login route
+  app.post('/api/auth/login', async (req, res) => {
+    try {
+      const result = loginSchema.safeParse(req.body);
+      if (!result.success) {
+        return res.status(400).json({ 
+          message: "Validation failed", 
+          errors: result.error.flatten().fieldErrors 
+        });
+      }
+
+      const { email, password } = result.data;
+
+      // Find user by email
+      const user = await storage.getUserByEmail(email);
+      if (!user) {
+        return res.status(400).json({ message: "Invalid email or password" });
+      }
+
+      // Verify password
+      const isValidPassword = await verifyPassword(password, user.password);
+      if (!isValidPassword) {
+        return res.status(400).json({ message: "Invalid email or password" });
+      }
+
+      // Set session
+      req.session.userId = user.id;
+      
+      // Manually save session to ensure it's persisted
+      await new Promise((resolve, reject) => {
+        req.session.save((err) => {
+          if (err) {
+            console.error("Session save error:", err);
+            reject(err);
+          } else {
+            console.log("Session saved successfully for user:", user.id);
+            resolve(undefined);
+          }
+        });
+      });
+
+      // Update last login
+      await storage.updateUser(user.id, { lastLogin: new Date() });
+
+      // Return user without password
+      const { password: _, ...userWithoutPassword } = user;
+      res.json({ user: userWithoutPassword });
+    } catch (error) {
+      console.error("Error during login:", error);
+      res.status(500).json({ message: "Failed to login" });
+    }
+  });
+
+  // Note: Logout is handled by Replit Auth at /api/logout in replitAuth.ts
+
+  // Email verification endpoint
+  app.get('/api/auth/verify-email/:token', async (req, res) => {
+    try {
+      const { token } = req.params;
+      
+      if (!token) {
+        return res.status(400).json({ message: "Verification token is required" });
+      }
+
+      // Find user by verification token
+      const user = await storage.getUserByVerificationToken(token);
+      if (!user) {
+        return res.status(400).json({ message: "Invalid or expired verification token" });
+      }
+
+      // Check if token is expired
+      if (user.emailVerificationExpires && user.emailVerificationExpires < new Date()) {
+        return res.status(400).json({ message: "Verification token has expired" });
+      }
+
+      // Check if already verified
+      if (user.isEmailVerified === "true") {
+        return res.status(400).json({ message: "Email is already verified" });
+      }
+
+      // Verify the user's email
+      const verifiedUser = await storage.verifyUserEmail(user.id);
+
+      // Send welcome email
+      try {
+        await emailService.sendWelcomeEmail(
+          verifiedUser.email, 
+          verifiedUser.firstName || undefined
+        );
+      } catch (emailError) {
+        console.error("Failed to send welcome email:", emailError);
+        // Continue even if welcome email fails
+      }
+
+      res.json({ 
+        message: "Email verified successfully! Welcome to JPEG Compressor.",
+        user: {
+          id: verifiedUser.id,
+          email: verifiedUser.email,
+          firstName: verifiedUser.firstName,
+          lastName: verifiedUser.lastName,
+          isEmailVerified: true,
+        }
+      });
+    } catch (error) {
+      console.error("Error verifying email:", error);
+      res.status(500).json({ message: "Failed to verify email" });
+    }
+  });
+
+  // Resend verification email endpoint
+  app.post('/api/auth/resend-verification', isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user;
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Check if already verified
+      if (user.isEmailVerified === "true") {
+        return res.status(400).json({ message: "Email is already verified" });
+      }
+
+      // Generate new verification token
+      const verificationToken = emailService.generateVerificationToken();
+      const verificationExpires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+
+      // Update user with new token
+      await storage.updateUser(user.id, {
+        emailVerificationToken: verificationToken,
+        emailVerificationExpires: verificationExpires,
+      });
+
+      // Send verification email
+      try {
+        await emailService.sendVerificationEmail(
+          user.email, 
+          verificationToken, 
+          user.firstName || undefined
+        );
+        res.json({ message: "Verification email sent successfully" });
+      } catch (emailError) {
+        console.error("Failed to send verification email:", emailError);
+        res.status(500).json({ message: "Failed to send verification email" });
+      }
+    } catch (error) {
+      console.error("Error resending verification email:", error);
+      res.status(500).json({ message: "Failed to resend verification email" });
+    }
+  });
+
+  // Create subscription with Micro Max and Micro Zen plans
+  app.post('/api/create-subscription', isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user;
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const { planType } = req.body;
+      if (!planType || !['micro-max', 'micro-zen'].includes(planType)) {
+        return res.status(400).json({ message: "Invalid plan type" });
+      }
+
+      // Plan configurations
+      const planConfig = {
+        'micro-max': {
+          name: 'Micro Max',
+          price: 1999, // $19.99 in cents
+          description: 'Unlimited image compression with 75MB file limit'
+        },
+        'micro-zen': {
+          name: 'Micro Zen', 
+          price: 9999, // $99.99 in cents
+          description: 'Unlimited compression and conversion with 150MB file limit'
+        }
+      };
+
+      const config = planConfig[planType as keyof typeof planConfig];
+
+      let customerId = user.stripeCustomerId;
+
+      // Create Stripe customer if doesn't exist
+      if (!customerId) {
+        const customer = await stripe.customers.create({
+          email: user.email,
+          name: user.firstName && user.lastName ? `${user.firstName} ${user.lastName}` : undefined,
+        });
+        customerId = customer.id;
+        await storage.updateUserStripeInfo(user.id, customerId);
+      }
+
+      // Create subscription with yearly billing
+      const subscription = await stripe.subscriptions.create({
+        customer: customerId,
+        items: [{
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: config.name,
+              description: config.description,
+            },
+            unit_amount: config.price,
+            recurring: {
+              interval: 'year',
+            },
+          },
+        }],
+        payment_behavior: 'default_incomplete',
+        payment_settings: { save_default_payment_method: 'on_subscription' },
+        expand: ['latest_invoice.payment_intent'],
+        metadata: {
+          plan_type: planType,
+        },
+      });
+
+      // Update user with subscription info
+      await storage.updateUserStripeInfo(user.id, customerId, subscription.id);
+
+      // Get the client secret from the latest invoice's payment intent
+      let clientSecret = null;
+      
+      if (subscription.latest_invoice) {
+        const invoice = subscription.latest_invoice as Stripe.Invoice;
+        
+        if (invoice.payment_intent) {
+          const paymentIntent = invoice.payment_intent as Stripe.PaymentIntent;
+          clientSecret = paymentIntent.client_secret;
+        }
+      }
+
+      res.json({
+        subscriptionId: subscription.id,
+        clientSecret: clientSecret,
+        status: subscription.status,
+      });
+    } catch (error: any) {
+      console.error("Error creating subscription:", error);
+      res.status(500).json({ message: "Failed to create subscription", error: error.message });
+    }
+  });
+
+  // Get subscription info endpoint for dashboard
+  app.get('/api/subscription-info', isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user;
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+
+      let subscriptionInfo = {
+        isPremium: false,
+        stripeCustomerId: user.stripeCustomerId,
+        stripeSubscriptionId: user.stripeSubscriptionId,
+        subscriptionStatus: 'inactive',
+        currentPeriodEnd: null,
+        cancelAtPeriodEnd: false
+      };
+
+      if (user.stripeSubscriptionId) {
+        try {
+          const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+          subscriptionInfo = {
+            isPremium: subscription.status === 'active',
+            stripeCustomerId: user.stripeCustomerId,
+            stripeSubscriptionId: user.stripeSubscriptionId,
+            subscriptionStatus: subscription.status,
+            currentPeriodEnd: subscription.current_period_end ? new Date(subscription.current_period_end * 1000).toISOString() : null,
+            cancelAtPeriodEnd: subscription.cancel_at_period_end
+          };
+        } catch (error) {
+          console.error("Error retrieving subscription:", error);
+        }
+      }
+
+      res.json(subscriptionInfo);
+    } catch (error: any) {
+      console.error("Error fetching subscription info:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Get payment intent for incomplete subscription
+  app.post('/api/subscription/get-payment-intent', isAuthenticated, async (req, res) => {
+    try {
+      const { subscriptionId } = req.body;
+      if (!subscriptionId) {
+        return res.status(400).json({ error: "Subscription ID required" });
+      }
+
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
+        expand: ['latest_invoice.payment_intent']
+      });
+
+      const invoice = subscription.latest_invoice as any;
+      if (invoice?.payment_intent?.client_secret) {
+        res.json({ 
+          clientSecret: invoice.payment_intent.client_secret,
+          subscriptionId: subscription.id 
+        });
+      } else {
+        res.status(400).json({ error: "No payment intent found for this subscription" });
+      }
+    } catch (error: any) {
+      console.error("Error getting payment intent:", error);
+      res.status(500).json({ error: "Failed to get payment intent" });
+    }
+  });
+
+
+
+  // Reset subscription data to clear broken state  
+  app.post('/api/subscription/reset', isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      
+      // Try multiple ways to get userId based on different authentication patterns
+      let userId = user?.claims?.sub || user?.id;
+      
+      console.log("Reset endpoint - user object exists:", !!user);
+      console.log("Reset endpoint - user.claims exists:", !!user?.claims);
+      console.log("Reset endpoint - user.id:", user?.id);
+      console.log("Reset endpoint - user.claims.sub:", user?.claims?.sub);
+      console.log("Reset endpoint - final userId:", userId);
+      
+      if (!userId) {
+        console.error("No userId found in request, user object:", JSON.stringify(user, null, 2));
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      console.log(`Resetting subscription data for user: ${userId}`);
+      
+      // Clear subscription data from user record
+      await storage.updateUser(userId, { 
+        stripeSubscriptionId: null,
+        subscriptionStatus: "inactive"
+      });
+
+      console.log("Successfully reset subscription data");
+      res.json({ success: true, message: "Subscription data reset" });
+    } catch (error: any) {
+      console.error("Error resetting subscription:", error);
+      res.status(500).json({ error: "Failed to reset subscription" });
+    }
+  });
+
+  // Credit payment endpoint
+  app.post('/api/create-credit-payment-intent', async (req, res) => {
+    try {
+      const { packageId, sessionId } = req.body;
+      
+      if (!packageId) {
+        return res.status(400).json({ error: "Package ID is required" });
+      }
+
+      // Import CREDIT_PACKAGES dynamically
+      const { CREDIT_PACKAGES } = await import('./tierConfig');
+      const selectedPackage = CREDIT_PACKAGES.find(pkg => pkg.id === packageId);
+      
+      if (!selectedPackage) {
+        return res.status(400).json({ error: "Invalid package ID" });
+      }
+
+      // Get user if authenticated
+      const user = req.user;
+      const userId = user?.id || null;
+      
+      // Create payment intent
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: selectedPackage.price, // Amount in cents
+        currency: 'usd',
+        metadata: {
+          packageId: selectedPackage.id,
+          packageName: selectedPackage.name,
+          credits: selectedPackage.credits.toString(),
+          userId: userId || 'guest',
+          sessionId: sessionId || req.sessionID
+        },
+        description: `${selectedPackage.name} - ${selectedPackage.credits} credits`
+      });
+
+      // Create purchase record
+      const { creditPurchases } = await import('@shared/schema');
+      const { db } = await import('./db');
+      
+      await db.insert(creditPurchases).values({
+        userId,
+        sessionId: sessionId || req.sessionID,
+        packageId: selectedPackage.id,
+        packageName: selectedPackage.name,
+        credits: selectedPackage.credits,
+        price: selectedPackage.price,
+        pricePerCredit: selectedPackage.pricePerCredit,
+        stripePaymentIntentId: paymentIntent.id,
+        status: 'pending'
+      });
+
+      res.json({ 
+        clientSecret: paymentIntent.client_secret,
+        packageId: selectedPackage.id 
+      });
+    } catch (error: any) {
+      console.error("Error creating credit payment intent:", error);
+      res.status(500).json({ error: "Failed to create payment intent" });
+    }
+  });
+
+  // Get user's credit balance
+  app.get('/api/credits/balance', async (req, res) => {
+    try {
+      const user = req.user;
+      const userId = user?.id;
+      
+      if (userId) {
+        // Get authenticated user's credits
+        const userRecord = await storage.getUser(userId);
+        const { UsageTracker } = await import('./usageTracker');
+        const usage = await UsageTracker.getUsage(userId);
+        
+        res.json({
+          purchasedCredits: userRecord?.purchasedCredits || 0,
+          totalAvailableCredits: Math.floor(usage.currentCredits / 100), // Convert from cents
+          usedCredits: Math.floor((90 * 100 + (userRecord?.purchasedCredits || 0) * 100 - usage.currentCredits) / 100)
+        });
+      } else {
+        // Get anonymous user's credits
+        const { UsageTracker } = await import('./usageTracker');
+        const fingerprint = UsageTracker.generateFingerprint(req);
+        const usage = await UsageTracker.getUsage(undefined, fingerprint);
+        
+        res.json({
+          purchasedCredits: 0,
+          totalAvailableCredits: Math.floor(usage.currentCredits / 100), // Convert from cents
+          usedCredits: Math.floor((90 * 100 - usage.currentCredits) / 100)
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching credit balance:', error);
+      res.status(500).json({ error: 'Failed to fetch credit balance' });
+    }
+  });
+
+  // Cancel subscription endpoint
+  app.post('/api/cancel-subscription', isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user;
+      if (!user || !user.stripeSubscriptionId) {
+        return res.status(404).json({ error: "No active subscription found" });
+      }
+
+      // Cancel subscription at period end (don't immediately cancel)
+      const subscription = await stripe.subscriptions.update(user.stripeSubscriptionId, {
+        cancel_at_period_end: true
+      });
+
+      res.json({
+        message: "Subscription cancelled successfully",
+        cancelAtPeriodEnd: subscription.cancel_at_period_end,
+        currentPeriodEnd: new Date(subscription.current_period_end * 1000).toISOString()
+      });
+    } catch (error: any) {
+      console.error("Error cancelling subscription:", error);
+      res.status(400).json({ error: error.message });
+    }
+  });
+
+  // Get current subscription status
+  app.get('/api/subscription/status', isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user;
+      if (!user || !user.stripeSubscriptionId) {
+        return res.json({ status: 'inactive', subscription: null });
+      }
+
+      const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+      
+      res.json({
+        status: subscription.status,
+        subscription: {
+          id: subscription.id,
+          status: subscription.status,
+          currentPeriodEnd: (subscription as any).current_period_end,
+          cancelAtPeriodEnd: subscription.cancel_at_period_end,
+          plan: subscription.items.data[0]?.price?.nickname || 'Premium Plan',
+        },
+      });
+    } catch (error: any) {
+      console.error("Error fetching subscription:", error);
+      res.status(500).json({ message: "Failed to fetch subscription" });
+    }
+  });
+
+  // Cancel subscription
+  app.post('/api/subscription/cancel', isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user;
+      if (!user || !user.stripeSubscriptionId) {
+        return res.status(404).json({ message: "No active subscription found" });
+      }
+
+      const subscription = await stripe.subscriptions.update(user.stripeSubscriptionId, {
+        cancel_at_period_end: true,
+      });
+
+      res.json({
+        message: "Subscription will be canceled at the end of the current period",
+        cancelAt: (subscription as any).current_period_end,
+      });
+    } catch (error: any) {
+      console.error("Error canceling subscription:", error);
+      res.status(500).json({ message: "Failed to cancel subscription" });
+    }
+  });
+
+  // Stripe webhook endpoint
+  app.post('/api/webhooks/stripe', express.raw({ type: 'application/json' }), async (req, res) => {
+    const sig = req.headers['stripe-signature'] as string;
+    let event: Stripe.Event;
+
+    try {
+      event = stripe.webhooks.constructEvent(req.body, sig, process.env.STRIPE_WEBHOOK_SECRET || '');
+    } catch (err: any) {
+      console.error('Webhook signature verification failed:', err.message);
+      return res.status(400).send(`Webhook Error: ${err.message}`);
+    }
+
+    console.log(`Processing webhook event: ${event.type}`);
+
+    // Handle the event
+    switch (event.type) {
+      case 'customer.subscription.created':
+      case 'customer.subscription.updated': {
+        const subscription = event.data.object as Stripe.Subscription;
+        const customer = await stripe.customers.retrieve(subscription.customer as string);
+        
+        if ('email' in customer && customer.email) {
+          const user = await storage.getUserByEmail(customer.email);
+          if (user) {
+            await storage.updateSubscriptionStatus(
+              user.id,
+              subscription.status,
+              new Date((subscription as any).current_period_end * 1000)
+            );
+
+            // Send subscription confirmation email for active subscriptions
+            if (subscription.status === 'active') {
+              try {
+                // Determine plan details based on price
+                const priceId = subscription.items.data[0]?.price?.id;
+                let planName = 'Premium';
+                let amount = '$9.99';
+                
+                // Map price IDs to plan names
+                if (priceId?.includes('business')) {
+                  planName = 'Business';
+                  amount = '$29.99';
+                } else if (priceId?.includes('enterprise')) {
+                  planName = 'Enterprise';
+                  amount = '$99.99';
+                }
+
+                await emailService.sendSubscriptionConfirmation(
+                  customer.email,
+                  user.firstName || 'Valued Customer',
+                  {
+                    planName,
+                    amount,
+                    billingPeriod: 'monthly',
+                    nextBillingDate: new Date((subscription as any).current_period_end * 1000),
+                    subscriptionId: subscription.id
+                  }
+                );
+                console.log(`${planName} subscription confirmation email sent to ${customer.email}`);
+              } catch (emailError) {
+                console.error('Failed to send subscription confirmation email:', emailError);
+              }
+            }
+          }
+        }
+        break;
+      }
+      
+      case 'customer.subscription.deleted': {
+        const subscription = event.data.object as Stripe.Subscription;
+        const customer = await stripe.customers.retrieve(subscription.customer as string);
+        
+        if ('email' in customer && customer.email) {
+          const user = await storage.getUserByEmail(customer.email);
+          if (user) {
+            await storage.updateSubscriptionStatus(user.id, 'canceled');
+
+            // Send cancellation email
+            try {
+              await emailService.sendSubscriptionCancellation(
+                customer.email,
+                user.firstName || 'Valued Customer'
+              );
+              console.log(`Subscription cancellation email sent to ${customer.email}`);
+            } catch (emailError) {
+              console.error('Failed to send cancellation email:', emailError);
+            }
+          }
+        }
+        break;
+      }
+
+      case 'invoice.payment_succeeded': {
+        const invoice = event.data.object as Stripe.Invoice;
+        
+        if (invoice.customer && invoice.customer_email) {
+          const user = await storage.getUserByEmail(invoice.customer_email);
+          if (user) {
+            try {
+              // Send invoice email with payment confirmation
+              await emailService.sendInvoiceEmail(
+                invoice.customer_email,
+                user.firstName || 'Valued Customer',
+                {
+                  invoiceNumber: invoice.number || `INV-${invoice.id?.slice(-8) || 'UNKNOWN'}`,
+                  amount: `$${((invoice.amount_paid || 0) / 100).toFixed(2)}`,
+                  paidDate: new Date((invoice.status_transitions?.paid_at || Date.now() / 1000) * 1000),
+                  description: 'Premium JPEG Compressor Subscription',
+                  invoiceUrl: invoice.hosted_invoice_url || '',
+                  period: {
+                    start: new Date(invoice.period_start * 1000),
+                    end: new Date(invoice.period_end * 1000)
+                  }
+                }
+              );
+              console.log(`Invoice email sent to ${invoice.customer_email}`);
+            } catch (emailError) {
+              console.error('Failed to send invoice email:', emailError);
+            }
+          }
+        }
+        break;
+      }
+
+      case 'payment_intent.succeeded': {
+        const paymentIntent = event.data.object as Stripe.PaymentIntent;
+        
+        // Check if this is a credit purchase (has packageId in metadata)
+        if (paymentIntent.metadata.packageId) {
+          try {
+            console.log(`Processing credit purchase payment: ${paymentIntent.id}`);
+            
+            // Import necessary modules
+            const { creditPurchases } = await import('@shared/schema');
+            const { db } = await import('./db');
+            const { eq } = await import('drizzle-orm');
+            
+            // Update purchase record to completed
+            await db
+              .update(creditPurchases)
+              .set({ 
+                status: 'completed', 
+                completedAt: new Date() 
+              })
+              .where(eq(creditPurchases.stripePaymentIntentId, paymentIntent.id));
+            
+            // Add credits to user account if authenticated
+            const userId = paymentIntent.metadata.userId;
+            if (userId && userId !== 'guest') {
+              const credits = parseInt(paymentIntent.metadata.credits);
+              
+              // Get current user
+              const user = await storage.getUser(userId);
+              if (user) {
+                // Add credits to user account
+                const newCredits = (user.purchasedCredits || 0) + credits;
+                await storage.updateUser(userId, { 
+                  purchasedCredits: newCredits 
+                });
+                
+                console.log(`Added ${credits} credits to user ${userId}. Total: ${newCredits}`);
+                
+                // Send credit-specific confirmation email if we have user email
+                if (user.email) {
+                  try {
+                    // Send enhanced credit purchase confirmation
+                    await emailService.sendPaymentConfirmation(
+                      user.email,
+                      user.firstName || 'Valued Customer',
+                      {
+                        amount: `$${(paymentIntent.amount / 100).toFixed(2)}`,
+                        paymentDate: new Date(),
+                        paymentMethod: 'Credit Card',
+                        transactionId: paymentIntent.id,
+                        credits: credits
+                      }
+                    );
+                    
+                    // Also send detailed receipt
+                    const packageName = paymentIntent.metadata.packageName || `${credits} Credits`;
+                    const pricePerCredit = `${(paymentIntent.amount / 100 / credits).toFixed(3)}¢`;
+                    
+                    await emailService.sendCreditPurchaseReceipt(
+                      user.email,
+                      user.firstName || 'Valued Customer',
+                      {
+                        packageName,
+                        credits,
+                        amount: `$${(paymentIntent.amount / 100).toFixed(2)}`,
+                        transactionId: paymentIntent.id,
+                        pricePerCredit
+                      }
+                    );
+                    console.log(`Credit purchase confirmation and receipt sent to ${user.email}`);
+                  } catch (emailError) {
+                    console.error('Failed to send credit purchase confirmation email:', emailError);
+                  }
+                }
+              }
+            }
+            
+            console.log(`Successfully processed credit purchase for ${paymentIntent.metadata.credits} credits`);
+          } catch (error) {
+            console.error('Error processing credit purchase:', error);
+          }
+        }
+        // Handle regular subscription payments
+        else if (paymentIntent.customer && paymentIntent.receipt_email) {
+          const user = await storage.getUserByEmail(paymentIntent.receipt_email);
+          if (user) {
+            try {
+              // Send payment confirmation email
+              await emailService.sendPaymentConfirmation(
+                paymentIntent.receipt_email,
+                user.firstName || 'Valued Customer',
+                {
+                  amount: `$${(paymentIntent.amount / 100).toFixed(2)}`,
+                  paymentDate: new Date(),
+                  paymentMethod: 'Credit Card',
+                  transactionId: paymentIntent.id
+                }
+              );
+              console.log(`Payment confirmation email sent to ${paymentIntent.receipt_email}`);
+            } catch (emailError) {
+              console.error('Failed to send payment confirmation email:', emailError);
+            }
+          }
+        }
+        break;
+      }
+
+      case 'invoice.payment_failed': {
+        const invoice = event.data.object as Stripe.Invoice;
+        
+        if (invoice.customer && invoice.customer_email) {
+          const user = await storage.getUserByEmail(invoice.customer_email);
+          if (user) {
+            try {
+              // Send payment failure notification
+              await emailService.sendPaymentFailureNotification(
+                invoice.customer_email,
+                user.firstName || 'Valued Customer',
+                'Premium', // Plan name - could be determined from invoice
+                invoice.next_payment_attempt ? new Date(invoice.next_payment_attempt * 1000) : undefined
+              );
+              console.log(`Payment failure notification sent to ${invoice.customer_email}`);
+            } catch (emailError) {
+              console.error('Failed to send payment failure email:', emailError);
+            }
+          }
+        }
+        break;
+      }
+
+      case 'payment_intent.payment_failed': {
+        const paymentIntent = event.data.object as Stripe.PaymentIntent;
+        
+        // Check if this is a credit purchase that failed
+        if (paymentIntent.metadata.packageId && paymentIntent.metadata.userId) {
+          try {
+            const userId = paymentIntent.metadata.userId;
+            const user = await storage.getUser(userId);
+            
+            if (user && user.email) {
+              const packageName = paymentIntent.metadata.packageName || `${paymentIntent.metadata.credits} Credits`;
+              const amount = `$${(paymentIntent.amount / 100).toFixed(2)}`;
+              
+              // Send credit purchase failure notification
+              await emailService.sendPaymentFailureForCredits(
+                user.email,
+                user.firstName || 'Valued Customer',
+                packageName,
+                amount
+              );
+              console.log(`Credit purchase failure notification sent to ${user.email}`);
+              
+              // Update purchase record to failed
+              const { creditPurchases } = await import('@shared/schema');
+              const { db } = await import('./db');
+              const { eq } = await import('drizzle-orm');
+              
+              await db
+                .update(creditPurchases)
+                .set({ 
+                  status: 'failed',
+                  completedAt: new Date()
+                })
+                .where(eq(creditPurchases.stripePaymentIntentId, paymentIntent.id));
+            }
+          } catch (error) {
+            console.error('Failed to process credit purchase payment failure:', error);
+          }
+        }
+        break;
+      }
+
+      default:
+        console.log(`Unhandled event type ${event.type}`);
+    }
+
+    res.json({ received: true });
+  });
+
+  // Usage monitoring endpoint for automated email triggers
+  app.post("/api/monitor-usage", async (req, res) => {
+    try {
+      const { email, firstName, tierName, compressions, conversions, usagePercent } = req.body;
+      
+      if (!email || !firstName || !tierName) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      // Send usage warning at 80% threshold
+      if (usagePercent >= 80) {
+        try {
+          await emailService.sendUsageLimitWarning(email, firstName, usagePercent, tierName);
+          console.log(`Usage warning email sent to ${email} (${usagePercent}% usage)`);
+        } catch (emailError) {
+          console.error('Failed to send usage warning email:', emailError);
+        }
+      }
+
+      // Send promotional upgrade email at 90% threshold
+      if (usagePercent >= 90 && tierName.toLowerCase() === 'free') {
+        try {
+          await emailService.sendTierUpgradePromo(email, firstName, 'free', 'premium');
+          console.log(`Upgrade promo email sent to ${email}`);
+        } catch (emailError) {
+          console.error('Failed to send upgrade promo email:', emailError);
+        }
+      }
+
+      res.json({ success: true, message: "Usage monitoring completed" });
+    } catch (error: any) {
+      console.error("Error monitoring usage:", error);
+      res.status(500).json({ error: "Failed to monitor usage" });
+    }
+  });
+
+  // Send daily usage report (could be called by a cron job)
+  app.post("/api/send-daily-report", async (req, res) => {
+    try {
+      const { email, firstName, stats } = req.body;
+      
+      if (!email || !firstName || !stats) {
+        return res.status(400).json({ error: "Missing required fields" });
+      }
+
+      await emailService.sendDailyUsageReport(email, firstName, stats);
+      console.log(`Daily usage report sent to ${email}`);
+
+      res.json({ success: true, message: "Daily report sent" });
+    } catch (error: any) {
+      console.error("Error sending daily report:", error);
+      res.status(500).json({ error: "Failed to send daily report" });
+    }
+  });
+
+  // Development-only: Create master test user
+  app.post("/api/dev/create-master-user", async (req, res) => {
+    try {
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(403).json({ message: "This endpoint is only available in development" });
+      }
+
+      const masterEmail = "master@microjpeg.com";
+      const masterPassword = "MasterTest123!";
+
+      // Check if master user already exists
+      const existingUser = await storage.getUserByEmail(masterEmail);
+      if (existingUser) {
+        return res.json({
+          message: "Master user already exists",
+          email: masterEmail,
+          password: masterPassword,
+          userId: existingUser.id
+        });
+      }
+
+      // Create master user
+      const hashedPassword = await hashPassword(masterPassword);
+      const masterUser = await storage.createUser({
+        email: masterEmail,
+        password: hashedPassword,
+        firstName: "Master",
+        lastName: "Test",
+        profileImageUrl: null,
+        isEmailVerified: "true", // Pre-verified
+        emailVerificationToken: null,
+        emailVerificationExpires: null,
+        stripeCustomerId: null,
+        stripeSubscriptionId: null,
+        subscriptionPlan: "free",
+        subscriptionStatus: "inactive",
+        subscriptionEndDate: null,
+        isPremium: false,
+        lastLogin: null,
+      });
+
+      res.json({
+        message: "Master test user created successfully",
+        email: masterEmail,
+        password: masterPassword,
+        userId: masterUser.id,
+        instructions: "Use this user to test all subscription tiers. Use /api/dev/set-user-tier to switch tiers."
+      });
+    } catch (error: any) {
+      console.error("Error creating master user:", error);
+      res.status(500).json({ message: "Failed to create master user" });
+    }
+  });
+
+  // Development-only: Set user tier for testing
+  app.post("/api/dev/set-user-tier", isAuthenticated, async (req, res) => {
+    try {
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(403).json({ message: "This endpoint is only available in development" });
+      }
+
+      const { tier } = req.body;
+      const sessionUser = req.user;
+      
+      if (!sessionUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      if (!['free', 'premium', 'business', 'enterprise'].includes(tier)) {
+        return res.status(400).json({ message: "Invalid tier. Must be: free, premium, business, or enterprise" });
+      }
+
+      // Update user tier settings
+      let updateData: any = {
+        subscriptionPlan: tier,
+        subscriptionStatus: tier === 'free' ? 'inactive' : 'active',
+        isPremium: tier !== 'free',
+        subscriptionEndDate: tier === 'free' ? null : new Date(Date.now() + 30 * 24 * 60 * 60 * 1000), // 30 days from now
+      };
+
+      const updatedUser = await storage.updateUserTier(sessionUser.id, updateData);
+      if (!updatedUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      res.json({
+        message: `User tier set to ${tier.toUpperCase()}`,
+        userId: updatedUser.id,
+        tier: tier,
+        isPremium: updatedUser.isPremium,
+        subscriptionStatus: updatedUser.subscriptionStatus,
+        subscriptionPlan: updatedUser.subscriptionPlan
+      });
+    } catch (error: any) {
+      console.error("Error setting user tier:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Development-only: Get current user tier info
+  app.get("/api/dev/user-tier-info", isAuthenticated, async (req, res) => {
+    try {
+      if (process.env.NODE_ENV === 'production') {
+        return res.status(403).json({ message: "This endpoint is only available in development" });
+      }
+
+      const sessionUser = req.user;
+      if (!sessionUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const user = await storage.getUser(sessionUser.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      const tierConfig = getUserTier(user);
+
+      res.json({
+        userId: user.id,
+        email: user.email,
+        currentTier: tierConfig.id,
+        tierDisplayName: tierConfig.displayName,
+        isPremium: user.isPremium,
+        subscriptionStatus: user.subscriptionStatus,
+        subscriptionPlan: user.subscriptionPlan,
+        subscriptionEndDate: user.subscriptionEndDate,
+        tierLimits: tierConfig.limits,
+        availableTiers: ['free', 'premium', 'business', 'enterprise']
+      });
+    } catch (error: any) {
+      console.error("Error getting user tier info:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Get user's compression limits and usage
+  app.get("/api/compression-limits", isAuthenticated, async (req, res) => {
+    try {
+      const sessionUser = req.user;
+      if (!sessionUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Get the full user from storage to check subscription status
+      const user = await storage.getUser(sessionUser.id);
+      if (!user) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Check subscription status properly (including development toggle)
+      let isPremium = false;
+      
+      // Check if manually set to premium (for development/testing)
+      if (user.isPremium) {
+        isPremium = true;
+      } else if (user.stripeSubscriptionId) {
+        try {
+          const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+          isPremium = subscription.status === 'active';
+        } catch (error) {
+          console.error("Error checking subscription:", error);
+          isPremium = false;
+        }
+      }
+      
+      if (isPremium) {
+        return res.json({
+          isPremium: true,
+          limit: null, // Unlimited compressions
+          used: 0,
+          remaining: null,
+          resetTime: null,
+          maxFileSize: null // No file size limit for premium
+        });
+      }
+
+      // Free users now have unlimited compressions but 10MB file size limit
+      res.json({
+        isPremium: false,
+        limit: null, // Unlimited compressions for free users too
+        used: 0,
+        remaining: null,
+        resetTime: null,
+        maxFileSize: 10 * 1024 * 1024 // 10MB limit for free users
+      });
+    } catch (error) {
+      console.error("Error fetching compression limits:", error);
+      res.status(500).json({ message: "Failed to fetch compression limits" });
+    }
+  });
+
+  // Development-only premium toggle endpoint
+  app.post("/api/dev/toggle-premium", isAuthenticated, async (req, res) => {
+    try {
+      // Only allow in development environment
+      if (process.env.NODE_ENV !== 'development') {
+        return res.status(403).json({ message: "This endpoint is only available in development" });
+      }
+
+      const sessionUser = req.user;
+      if (!sessionUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      // Toggle the premium status
+      const updatedUser = await storage.togglePremiumStatus(sessionUser.id);
+      if (!updatedUser) {
+        return res.status(404).json({ message: "User not found" });
+      }
+
+      res.json({
+        message: `Premium status ${updatedUser.isPremium ? 'enabled' : 'disabled'}`,
+        isPremium: updatedUser.isPremium,
+        userId: updatedUser.id
+      });
+    } catch (error: any) {
+      console.error("Error toggling premium status:", error);
+      res.status(500).json({ message: "Internal server error" });
+    }
+  });
+
+  // Upload and compress images (now supports guest users)
+  app.post("/api/compress", upload.array("images", 20), async (req, res) => {
+    // Set timeout based on user plan - 30 seconds for anonymous, longer for paid users
+    const user = req.user;
+    const planLimits = user ? getUnifiedPlan('free') : getUnifiedPlan('anonymous');
+    const timeoutMs = planLimits.limits.processingTimeout * 1000;
+    req.setTimeout(timeoutMs);
+    res.setTimeout(timeoutMs);
+    try {
+      console.log("Upload request received:", { filesCount: req.files?.length || 0 });
+      const files = req.files as Express.Multer.File[];
+      if (!files || files.length === 0) {
+        console.log("No files found in request");
+        return res.status(400).json({ error: "No files uploaded" });
+      }
+
+      const user = req.user;
+      const sessionId = req.body.sessionId || req.sessionID;
+      const userId = user?.id || null; // Now optional for guest users
+      
+      // Apply tier-based restrictions
+      if (user) {
+        // Check batch size limits (max 20 files for all users)
+        if (files.length > 20) {
+          return res.status(400).json({ 
+            error: "Maximum 20 files per batch",
+            limit: 20,
+            current: files.length,
+            upgradeRequired: false
+          });
+        }
+
+        // Check individual file size limits - DISABLED for testing
+        // for (const file of files) {
+        //   const fileSizeCheck = checkFileLimit(user, file.size);
+        //   if (!fileSizeCheck.allowed) {
+        //     return res.status(413).json({ 
+        //       error: fileSizeCheck.message,
+        //       limit: fileSizeCheck.limit,
+        //       fileSize: file.size,
+        //       fileName: file.originalname,
+        //       upgradeRequired: true
+        //     });
+        //   }
+        // }
+      } else {
+        // Anonymous user limits using unified plan configuration
+        const anonPlan = getUnifiedPlan('anonymous');
+        
+        // Enforce 1 concurrent upload for anonymous users
+        if (files.length > anonPlan.limits.maxConcurrentUploads) {
+          return res.status(400).json({ 
+            error: `Free users can only upload ${anonPlan.limits.maxConcurrentUploads} file at a time. Sign up for batch uploads!`,
+            limit: anonPlan.limits.maxConcurrentUploads,
+            current: files.length
+          });
+        }
+
+        // Check file size limits
+        for (const file of files) {
+          if (file.size > anonPlan.limits.maxFileSize) {
+            const maxSizeMB = Math.round(anonPlan.limits.maxFileSize / (1024 * 1024));
+            return res.status(413).json({ 
+              error: `File "${file.originalname}" exceeds the ${maxSizeMB}MB limit for free users. Sign up for larger files!`,
+              limit: anonPlan.limits.maxFileSize,
+              fileSize: file.size,
+              fileName: file.originalname
+            });
+          }
+        }
+      }
+
+      const { 
+        qualityLevel = "medium", 
+        resizeOption = "none", 
+        outputFormat = "jpeg",
+        customQuality = 75,
+        compressionAlgorithm = "standard",
+        optimizeForWeb = true,
+        progressiveJpeg = false,
+        optimizeScans = false,
+        arithmeticCoding = false,
+        customWidth,
+        customHeight,
+        bulkMode = false // New: enable fast processing for bulk uploads
+      } = req.body;
+
+      // Check output format permissions for authenticated users
+      if (user && outputFormat !== 'keep-original' && outputFormat !== 'jpeg') {
+        const formatCheck = checkFormatSupport(user, outputFormat);
+        if (!formatCheck.allowed) {
+          return res.status(403).json({ 
+            error: formatCheck.message,
+            requestedFormat: outputFormat,
+            upgradeRequired: true
+          });
+        }
+      }
+      
+      // Check operation limits using unified counter
+      for (const file of files) {
+        const operationCheck = await checkOperationAllowed({
+          userId: user?.id || req.session?.userId,
+          sessionId: user?.id || req.session?.userId ? undefined : UnifiedOperationCounter.generateAnonymousSessionId(req),
+          operationType: outputFormat !== 'jpeg' && outputFormat !== 'jpg' ? 'conversion' : 'compression',
+          requestedOperations: 1
+        });
+        
+        if (!operationCheck.allowed) {
+          return res.status(429).json({
+            error: "Operation limit exceeded",
+            message: operationCheck.message,
+            limit: operationCheck.limitType,
+            upgradeRequired: !user
+          });
+        }
+      }
+
+      // Determine if this is a bulk upload (for performance optimizations)
+      const isBulkUpload = files.length >= 3 || bulkMode; // Lowered threshold for speed
+
+      const jobs = [];
+      // Fast job creation without blocking analysis
+      for (const file of files) {
+        console.log(`Creating compression job for user ${userId}, file: ${file.originalname}`);
+        const job = await storage.createCompressionJob({
+          userId, // Add userId for user association
+          originalFilename: file.originalname,
+          originalSize: file.size,
+          status: "pending",
+          qualityLevel,
+          resizeOption,
+          outputFormat,
+          originalPath: file.path,
+          compressedSize: null,
+          compressionRatio: null,
+          errorMessage: null,
+          compressedPath: null,
+        });
+
+        console.log(`Created job ${job.id} for user ${userId}`);
+        jobs.push(job);
+
+        // Start compression with performance optimizations for bulk uploads
+        compressImage(job.id, file, {
+          qualityLevel,
+          resizeOption,
+          outputFormat,
+          customQuality: parseInt(customQuality) || 75,
+          compressionAlgorithm,
+          optimizeForWeb: false, // Always disabled for speed
+          progressiveJpeg: false, // Always disabled for speed
+          optimizeScans: false, // Always disabled for speed
+          arithmeticCoding: false, // Always false for speed
+          customWidth: customWidth ? parseInt(customWidth) : undefined,
+          customHeight: customHeight ? parseInt(customHeight) : undefined,
+          fastMode: true // Always enable fast mode for speed
+        }).catch((error: Error) => {
+          console.error(`Compression failed for job ${job.id}:`, error);
+        });
+      }
+
+      res.json({ jobs });
+    } catch (error) {
+      console.error("Upload error:", error);
+      res.status(500).json({ error: "Failed to upload files" });
+    }
+  });
+
+  // Get job status
+  app.get("/api/jobs/:id", isAuthenticated, async (req, res) => {
+    const userId = req.user?.id;
+    try {
+      // Disable caching for real-time job updates
+      res.set({
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      });
+      
+      const job = await storage.getCompressionJob(req.params.id);
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+      
+      // Add preview images as base64 data URLs
+      let jobWithPreview: any = { ...job };
+      
+      // Add original image preview
+      if (job.originalPath) {
+        try {
+          const imageBuffer = await fs.readFile(job.originalPath);
+          const base64Image = imageBuffer.toString('base64');
+          jobWithPreview.originalPreviewDataUrl = `data:image/jpeg;base64,${base64Image}`;
+        } catch (fileError) {
+          console.warn(`Could not read original preview for job ${job.id}:`, fileError);
+        }
+      }
+      
+      // Add compressed image preview (only if compression is completed)
+      if (job.status === "completed" && job.compressedPath) {
+        try {
+          const compressedBuffer = await fs.readFile(job.compressedPath);
+          const base64Compressed = compressedBuffer.toString('base64');
+          let mimeType;
+          switch (job.outputFormat) {
+            case 'webp': mimeType = 'image/webp'; break;
+            case 'avif': mimeType = 'image/avif'; break;
+            case 'png': mimeType = 'image/png'; break;
+            default: mimeType = 'image/jpeg'; break;
+          }
+          jobWithPreview.compressedPreviewDataUrl = `data:${mimeType};base64,${base64Compressed}`;
+        } catch (fileError) {
+          console.warn(`Could not read compressed preview for job ${job.id}:`, fileError);
+        }
+      }
+      
+      res.json(jobWithPreview);
+    } catch (error) {
+      console.error("Get job error:", error);
+      res.status(500).json({ error: "Failed to get job status" });
+    }
+  });
+
+  // Get all jobs (supports both authenticated users and guest sessions)
+  app.get("/api/jobs", async (req, res) => {
+    try {
+      // Disable caching for real-time job updates
+      res.set({
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+      });
+
+      const sessionId = req.query.sessionId as string || req.sessionID;
+      const user = req.user;
+      
+      console.log(`/api/jobs called - User authenticated: ${!!req.isAuthenticated?.()}, User ID: ${user?.id}, Session ID: ${sessionId}`);
+      
+      let jobs;
+      if (req.isAuthenticated?.() && user?.id) {
+        // Authenticated user - get their jobs
+        console.log(`Fetching jobs for authenticated user: ${user.id}`);
+        jobs = await storage.getAllCompressionJobs(user.id);
+        console.log(`Found ${jobs.length} jobs for user ${user.id}`);
+      } else {
+        // Guest user - get jobs by session ID
+        console.log(`Fetching jobs for guest session: ${sessionId}`);
+        jobs = await storage.getCompressionJobsBySession(sessionId);
+        console.log(`Found ${jobs.length} jobs for session ${sessionId}`);
+      }
+      
+      res.json(jobs || []);
+    } catch (error) {
+      console.error("Get jobs error:", error);
+      res.status(500).json({ error: "Failed to get jobs" });
+    }
+  });
+
+
+  // Get original image preview
+  app.get("/api/preview/original/:id", async (req, res) => {
+    try {
+      console.log(`Requesting original preview for job: ${req.params.id}`);
+      const job = await storage.getCompressionJob(req.params.id);
+      
+      if (!job) {
+        console.log(`Job not found: ${req.params.id}`);
+        return res.status(404).json({ error: "Original image not found" });
+      }
+      
+      if (!job.originalPath) {
+        console.log(`No original path for job: ${req.params.id}`);
+        return res.status(404).json({ error: "Original image path not found" });
+      }
+
+      console.log(`Original path for job ${req.params.id}: ${job.originalPath}`);
+
+      // Check if file exists
+      try {
+        await fs.access(job.originalPath);
+        console.log(`Original file exists: ${job.originalPath}`);
+      } catch (accessError) {
+        console.log(`Original file does not exist: ${job.originalPath}`, accessError);
+        return res.status(404).json({ error: "Original image file not found" });
+      }
+
+      // Set caching headers for performance
+      res.set({
+        'Cache-Control': 'public, max-age=3600',
+        'Content-Type': 'image/jpeg'
+      });
+
+      // Stream the file efficiently using createReadStream for better performance
+      const stream = createReadStream(job.originalPath);
+      stream.pipe(res);
+      
+      // Handle stream errors
+      stream.on('error', (streamError) => {
+        console.error(`Stream error for job ${req.params.id}:`, streamError);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Failed to stream original image' });
+        }
+      });
+    } catch (error) {
+      console.error(`Error serving original preview for job ${req.params.id}:`, error);
+      res.status(500).json({ error: "Failed to load original preview" });
+    }
+  });
+
+  // Get compressed image preview
+  app.get("/api/preview/compressed/:id", async (req, res) => {
+    try {
+      const job = await storage.getCompressionJob(req.params.id);
+      if (!job || !job.compressedPath || job.status !== "completed") {
+        return res.status(404).json({ error: "Compressed image not found" });
+      }
+
+      // Check if file exists
+      try {
+        await fs.access(job.compressedPath);
+      } catch {
+        return res.status(404).json({ error: "Compressed image file not found" });
+      }
+
+      // Set caching headers and content type based on output format
+      let mimeType;
+      switch (job.outputFormat) {
+        case 'webp': mimeType = 'image/webp'; break;
+        case 'avif': mimeType = 'image/avif'; break;
+        case 'png': mimeType = 'image/png'; break;
+        default: mimeType = 'image/jpeg'; break;
+      }
+      res.set({
+        'Cache-Control': 'public, max-age=3600',
+        'Content-Type': mimeType
+      });
+
+      // Stream the file efficiently using createReadStream for better performance
+      const stream = createReadStream(job.compressedPath);
+      stream.pipe(res);
+      
+      // Handle stream errors
+      stream.on('error', (streamError) => {
+        console.error('Stream error:', streamError);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Failed to stream compressed image' });
+        }
+      });
+    } catch (error) {
+      console.error(`Error serving compressed preview for job ${req.params.id}:`, error);
+      res.status(500).json({ error: "Failed to load compressed preview" });
+    }
+  });
+
+  // Download compressed image
+  app.get("/api/download/:id", async (req, res) => {
+    try {
+      const job = await storage.getCompressionJob(req.params.id);
+      if (!job || !job.compressedPath) {
+        return res.status(404).json({ error: "Compressed file not found" });
+      }
+
+      console.log(`=== DOWNLOAD DEBUG ===`);
+      console.log(`Job ID: ${job.id}`);
+      console.log(`Output Format: ${job.outputFormat}`);
+      console.log(`Compressed Path: ${job.compressedPath}`);
+      console.log(`Original Filename: ${job.originalFilename}`);
+
+      // Set correct filename with proper extension based on output format
+      const originalName = job.originalFilename.replace(/\.[^/.]+$/, ""); // Remove original extension
+      let extension, contentType;
+      
+      switch (job.outputFormat) {
+        case 'webp':
+          extension = 'webp';
+          contentType = 'image/webp';
+          break;
+        case 'avif':
+          extension = 'avif';
+          contentType = 'image/avif';
+          break;
+        case 'png':
+          extension = 'png';
+          contentType = 'image/png';
+          break;
+        case 'tiff':
+          extension = 'tiff';
+          contentType = 'image/tiff';
+          break;
+        case 'jpeg':
+        default:
+          extension = 'jpg';
+          contentType = 'image/jpeg';
+          break;
+      }
+      
+      const filename = `compressed_${originalName}.${extension}`;
+      
+      console.log(`Download filename: ${filename}`);
+      console.log(`Content-Type: ${contentType}`);
+      console.log(`Extension: ${extension}`);
+      
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Type', contentType);
+      res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
+      res.setHeader('Pragma', 'no-cache');
+      res.setHeader('Expires', '0');
+      
+      // Get file stats first
+      const stats = await fs.stat(job.compressedPath);
+      console.log(`File size: ${stats.size} bytes`);
+      console.log(`=== END DOWNLOAD DEBUG ===`);
+      
+      // Set Content-Length header for better download performance
+      res.setHeader('Content-Length', stats.size);
+      
+      // Stream the file efficiently instead of loading into memory
+      const stream = createReadStream(job.compressedPath);
+      stream.pipe(res);
+      
+      stream.on('error', (streamError) => {
+        console.error('Download stream error:', streamError);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Failed to download file' });
+        }
+      });
+    } catch (error) {
+      console.error("Download error:", error);
+      res.status(500).json({ error: "Failed to download file" });
+    }
+  });
+
+  // Download all compressed images as ZIP
+  app.post("/api/download-all", async (req, res) => {
+    try {
+      const { jobIds } = req.body;
+      if (!jobIds || !Array.isArray(jobIds) || jobIds.length === 0) {
+        return res.status(400).json({ error: "Job IDs array is required" });
+      }
+
+      // Get all completed jobs
+      const jobs = [];
+      for (const jobId of jobIds) {
+        const job = await storage.getCompressionJob(jobId);
+        if (job && job.status === "completed" && job.compressedPath) {
+          jobs.push(job);
+        }
+      }
+
+      if (jobs.length === 0) {
+        return res.status(404).json({ error: "No completed files found" });
+      }
+
+      // Set response headers for ZIP download
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', 'attachment; filename="compressed_images.zip"');
+
+      // Create ZIP archive
+      const archive = archiver('zip', {
+        zlib: { level: 9 } // Maximum compression
+      });
+
+      // Handle archiver errors
+      archive.on('error', (err) => {
+        console.error('Archive error:', err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: "Failed to create ZIP archive" });
+        }
+      });
+
+      // Pipe archive to response
+      archive.pipe(res);
+
+      // Add files to archive
+      for (const job of jobs) {
+        try {
+          const filename = `compressed_${job.originalFilename}`;
+          archive.file(job.compressedPath!, { name: filename });
+        } catch (fileError) {
+          console.warn(`Could not add file ${job.originalFilename} to archive:`, fileError);
+        }
+      }
+
+      // Finalize the archive
+      await archive.finalize();
+      console.log(`ZIP download completed for ${jobs.length} files`);
+
+    } catch (error) {
+      console.error("Download all error:", error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Failed to create ZIP download" });
+      }
+    }
+  });
+
+  // Delete job and files
+  app.delete("/api/jobs/:id", isAuthenticated, async (req, res) => {
+    const userId = req.user?.id;
+    try {
+      const job = await storage.getCompressionJob(req.params.id);
+      if (!job) {
+        return res.status(404).json({ error: "Job not found" });
+      }
+
+      // Delete files with proper existence checks
+      try {
+        // Check and delete original file
+        try {
+          await fs.access(job.originalPath);
+          await fs.unlink(job.originalPath);
+          console.log(`Deleted original file: ${job.originalPath}`);
+        } catch (accessError) {
+          console.warn(`Original file ${job.originalPath} already deleted or not found`);
+        }
+        
+        // Check and delete compressed file
+        if (job.compressedPath) {
+          try {
+            await fs.access(job.compressedPath);
+            await fs.unlink(job.compressedPath);
+            console.log(`Deleted compressed file: ${job.compressedPath}`);
+          } catch (accessError) {
+            console.warn(`Compressed file ${job.compressedPath} already deleted or not found`);
+          }
+        }
+      } catch (fileError) {
+        console.warn("Failed to delete files:", fileError);
+      }
+
+      // Delete job from storage
+      await storage.deleteCompressionJob(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Delete job error:", error);
+      res.status(500).json({ error: "Failed to delete job" });
+    }
+  });
+
+  // Clear all jobs
+  app.delete("/api/jobs", async (req, res) => {
+    try {
+      const sessionId = req.query.sessionId as string || req.sessionID;
+      const user = req.user;
+      
+      let jobs;
+      if (req.isAuthenticated?.() && user?.id) {
+        // Authenticated user - get their jobs
+        console.log(`Clearing jobs for authenticated user: ${user.id}`);
+        jobs = await storage.getAllCompressionJobs(user.id);
+      } else {
+        // Guest user - get jobs by session ID
+        console.log(`Clearing jobs for guest session: ${sessionId}`);
+        jobs = await storage.getCompressionJobsBySession(sessionId);
+      }
+      
+      // Delete all files with proper existence checks
+      for (const job of jobs) {
+        try {
+          // Check and delete original file
+          try {
+            await fs.access(job.originalPath);
+            await fs.unlink(job.originalPath);
+            console.log(`Deleted original file for job ${job.id}: ${job.originalPath}`);
+          } catch (accessError) {
+            console.warn(`Original file for job ${job.id} already deleted: ${job.originalPath}`);
+          }
+          
+          // Check and delete compressed file
+          if (job.compressedPath) {
+            try {
+              await fs.access(job.compressedPath);
+              await fs.unlink(job.compressedPath);
+              console.log(`Deleted compressed file for job ${job.id}: ${job.compressedPath}`);
+            } catch (accessError) {
+              console.warn(`Compressed file for job ${job.id} already deleted: ${job.compressedPath}`);
+            }
+          }
+          
+          // Delete job from storage after files are handled
+          await storage.deleteCompressionJob(job.id);
+        } catch (fileError) {
+          console.warn(`Failed to delete files for job ${job.id}:`, fileError);
+          // Still try to delete from storage even if files fail
+          try {
+            await storage.deleteCompressionJob(job.id);
+          } catch (storageError) {
+            console.warn(`Failed to delete job ${job.id} from storage:`, storageError);
+          }
+        }
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Clear all jobs error:", error);
+      res.status(500).json({ error: "Failed to clear jobs" });
+    }
+  });
+
+  // Get compression analysis for uploaded file
+  app.get("/api/analyze/:id", async (req, res) => {
+    try {
+      const job = await storage.getCompressionJob(req.params.id);
+      if (!job || !job.originalPath) {
+        return res.status(404).json({ error: "Job or file not found" });
+      }
+
+      const analysis = await CompressionEngine.analyzeImage(job.originalPath);
+      res.json(analysis);
+    } catch (error) {
+      console.error("Analysis error:", error);
+      res.status(500).json({ error: "Failed to analyze image" });
+    }
+  });
+
+  // Compress with target file size
+  app.post("/api/compress-target-size", upload.array("images", 10), async (req, res) => {
+    try {
+      const files = req.files as Express.Multer.File[];
+      if (!files || files.length === 0) {
+        return res.status(400).json({ error: "No files uploaded" });
+      }
+
+      const { targetSize, maxQuality = 95, minQuality = 30 } = req.body;
+      if (!targetSize) {
+        return res.status(400).json({ error: "Target size is required" });
+      }
+
+      const targetSizeBytes = parseInt(targetSize) * 1024; // Convert KB to bytes
+      const jobs = [];
+
+      for (const file of files) {
+        const job = await storage.createCompressionJob({
+          originalFilename: file.originalname,
+          originalSize: file.size,
+          status: "pending",
+          qualityLevel: "custom",
+          resizeOption: "none",
+          outputFormat: "jpeg",
+          originalPath: file.path,
+          compressedSize: null,
+          compressionRatio: null,
+          errorMessage: null,
+          compressedPath: null,
+        });
+
+        jobs.push(job);
+
+        // Start target size compression
+        compressToTargetSize(job.id, file, targetSizeBytes, {
+          maxQuality: parseInt(maxQuality),
+          minQuality: parseInt(minQuality)
+        }).catch(error => {
+          console.error(`Target size compression failed for job ${job.id}:`, error);
+        });
+      }
+
+      res.json({ jobs, message: `Compressing to target size: ${targetSize}KB` });
+    } catch (error) {
+      console.error("Target size compression error:", error);
+      res.status(500).json({ error: "Failed to start target size compression" });
+    }
+  });
+
+  // Guest compression endpoints (no authentication required)
+  app.post('/api/guest/compress', upload.array('files'), async (req, res) => {
+    try {
+      const files = req.files as Express.Multer.File[];
+      if (!files || files.length === 0) {
+        return res.status(400).json({ error: 'No files provided' });
+      }
+
+      // Guest limits
+      const GUEST_MAX_FILES = 3;
+      const GUEST_FILE_SIZE_LIMIT = 5 * 1024 * 1024; // 5MB
+      const GUEST_QUALITY = 80;
+
+      if (files.length > GUEST_MAX_FILES) {
+        return res.status(400).json({ error: `Guest mode limited to ${GUEST_MAX_FILES} files` });
+      }
+
+      const results = [];
+      
+      for (const file of files) {
+        if (file.size > GUEST_FILE_SIZE_LIMIT) {
+          return res.status(400).json({ 
+            error: `File ${file.originalname} is too large (max 5MB in guest mode)` 
+          });
+        }
+
+        const jobId = randomUUID();
+        const timestamp = new Date().toISOString();
+        
+        try {
+          // Debug file information
+          console.log(`Processing file: ${file.originalname}, path: ${file.path}, size: ${file.size}`);
+          
+          // Check if file exists
+          try {
+            await fs.access(file.path);
+          } catch (accessError) {
+            console.error(`File does not exist at path: ${file.path}`);
+            throw new Error(`File not found: ${file.path}`);
+          }
+          
+          // Read the file from disk since multer stores it there
+          const fileBuffer = await fs.readFile(file.path);
+          console.log(`File buffer size: ${fileBuffer.length}`);
+          
+          // Validate that we have a valid image buffer
+          if (fileBuffer.length === 0) {
+            throw new Error('Empty file buffer');
+          }
+          
+          // Compress the image
+          const compressedBuffer = await sharp(fileBuffer)
+            .jpeg({ quality: GUEST_QUALITY, progressive: true })
+            .toBuffer();
+
+          // Store the compressed file temporarily (in memory for guests)
+          storage.setGuestFile(jobId, compressedBuffer, file.originalname);
+
+          const compressionRatio = ((file.size - compressedBuffer.length) / file.size) * 100;
+
+          results.push({
+            id: jobId,
+            originalName: file.originalname,
+            originalSize: file.size,
+            compressedSize: compressedBuffer.length,
+            compressionRatio: compressionRatio,
+            quality: GUEST_QUALITY
+          });
+
+        } catch (error) {
+          console.error(`Error compressing ${file.originalname}:`, error);
+          return res.status(500).json({ 
+            error: `Failed to compress ${file.originalname}` 
+          });
+        } finally {
+          // Clean up temporary file
+          try {
+            await fs.unlink(file.path);
+          } catch (cleanupError) {
+            console.error(`Failed to cleanup temp file ${file.path}:`, cleanupError);
+          }
+        }
+      }
+
+      // Track usage after successful compression using unified counter
+      for (const file of files) {
+        const fileExtension = path.extname(file.originalname).toLowerCase();
+        await recordOperation({
+          userId: user?.id || req.session?.userId,
+          sessionId: user?.id || req.session?.userId ? undefined : UnifiedOperationCounter.generateAnonymousSessionId(req),
+          operationType: 'compression',
+          fileFormat: fileExtension.substring(1) || 'unknown',
+          fileSizeMb: file.size / (1024 * 1024),
+          interface: 'web',
+          req
+        });
+      }
+
+      res.json({ files: results });
+    } catch (error) {
+      console.error('Guest compression error:', error);
+      res.status(500).json({ error: 'Failed to process files' });
+    }
+  });
+
+  app.get('/api/guest/download/:fileId', async (req, res) => {
+    try {
+      const { fileId } = req.params;
+      const guestFile = storage.getGuestFile(fileId);
+      
+      if (!guestFile) {
+        return res.status(404).json({ error: 'File not found' });
+      }
+
+      res.set({
+        'Content-Type': 'image/jpeg',
+        'Content-Disposition': `attachment; filename="${guestFile.originalName}"`,
+        'Content-Length': guestFile.buffer.length,
+      });
+
+      res.send(guestFile.buffer);
+    } catch (error) {
+      console.error('Guest download error:', error);
+      res.status(500).json({ error: 'Failed to download file' });
+    }
+  });
+
+  // Social sharing and rewards API endpoints
+  app.post('/api/social/share', async (req, res) => {
+    try {
+      const { platform, compressionJobId, shareText, imageStats } = req.body;
+
+      // Validate the request
+      if (!platform || !compressionJobId || !imageStats) {
+        return res.status(400).json({ error: 'Missing required fields' });
+      }
+
+      const validPlatforms = ['twitter', 'linkedin', 'facebook', 'instagram'];
+      if (!validPlatforms.includes(platform)) {
+        return res.status(400).json({ error: 'Invalid platform' });
+      }
+
+      // Get user info (could be authenticated user or guest)
+      let userId: string | null = null;
+      let sessionId: string | null = null;
+
+      if (req.isAuthenticated && req.isAuthenticated() && req.user) {
+        userId = (req.user as any).id;
+      } else {
+        // For guest users, use session or generate one
+        sessionId = req.sessionID || randomUUID();
+      }
+
+      // Calculate reward points based on platform
+      const platformRewards = {
+        twitter: 5,
+        linkedin: 7,
+        facebook: 6,
+        instagram: 8
+      };
+      const rewardPoints = platformRewards[platform as keyof typeof platformRewards];
+
+      // Create the social share record
+      const shareData = {
+        userId,
+        sessionId,
+        compressionJobId,
+        platform,
+        shareUrl: `${req.protocol}://${req.get('host')}?ref=${compressionJobId}`,
+        shareText,
+        imageStats,
+        rewardPointsEarned: rewardPoints
+      };
+
+      const share = await storage.createSocialShare(shareData);
+
+      // If user is authenticated, update their rewards
+      let discountMessage = '';
+      if (userId) {
+        try {
+          const updatedRewards = await storage.addRewardPoints(userId, rewardPoints, 'social_share', share.id);
+          
+          // Check if they unlocked a new discount level
+          const newDiscountPercent = calculateDiscountFromPoints(updatedRewards.totalPoints);
+          if (newDiscountPercent > updatedRewards.currentDiscountPercent) {
+            await storage.updateUserDiscount(userId, newDiscountPercent);
+            discountMessage = `You unlocked a ${newDiscountPercent}% discount on your next subscription!`;
+          }
+        } catch (rewardError) {
+          console.error('Error updating rewards:', rewardError);
+          // Don't fail the request, just log the error
+        }
+      }
+
+      res.json({
+        success: true,
+        shareId: share.id,
+        rewardPoints: userId ? rewardPoints : 0,
+        discountMessage,
+        message: userId 
+          ? `Share recorded! You earned ${rewardPoints} reward points.`
+          : 'Share recorded! Sign up to start earning reward points.'
+      });
+
+    } catch (error) {
+      console.error('Social sharing error:', error);
+      res.status(500).json({ error: 'Failed to record social share' });
+    }
+  });
+
+  // Get user's social sharing stats and rewards
+  app.get('/api/social/stats', async (req, res) => {
+    try {
+      if (!req.isAuthenticated || !req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+
+      const userId = (req.user as any).id;
+
+      // Get user's rewards info
+      const rewards = await storage.getUserRewards(userId);
+      
+      // Get recent shares
+      const recentShares = await storage.getUserShares(userId, 10);
+      
+      // Get referral info
+      const referralInfo = await storage.getUserReferral(userId);
+
+      res.json({
+        rewards: {
+          totalPoints: rewards?.totalPoints || 0,
+          currentDiscountPercent: rewards?.currentDiscountPercent || 0,
+          sharePoints: rewards?.sharePoints || 0,
+          referralPoints: rewards?.referralPoints || 0,
+          nextDiscountThreshold: rewards?.nextDiscountThreshold || 1
+        },
+        recentShares: recentShares || [],
+        referral: referralInfo ? {
+          referralCode: referralInfo.referralCode,
+          totalReferrals: referralInfo.totalReferrals,
+          totalEarned: referralInfo.totalEarned
+        } : null
+      });
+
+    } catch (error) {
+      console.error('Error fetching social stats:', error);
+      res.status(500).json({ error: 'Failed to fetch social stats' });
+    }
+  });
+
+  // Generate or get user's referral code
+  app.post('/api/social/referral', async (req, res) => {
+    try {
+      if (!req.isAuthenticated || !req.isAuthenticated() || !req.user) {
+        return res.status(401).json({ error: 'Authentication required' });
+      }
+
+      const userId = (req.user as any).id;
+
+      // Check if user already has a referral code
+      let referralInfo = await storage.getUserReferral(userId);
+      
+      if (!referralInfo) {
+        // Generate new referral code
+        const referralCode = generateReferralCode();
+        referralInfo = await storage.createUserReferral(userId, referralCode);
+      }
+
+      res.json({
+        referralCode: referralInfo.referralCode,
+        referralUrl: `${req.protocol}://${req.get('host')}?ref=${referralInfo.referralCode}`,
+        totalReferrals: referralInfo.totalReferrals,
+        totalEarned: referralInfo.totalEarned
+      });
+
+    } catch (error) {
+      console.error('Error managing referral code:', error);
+      res.status(500).json({ error: 'Failed to manage referral code' });
+    }
+  });
+
+  // Social sharing tracking endpoint (simple version)
+  app.post('/api/social-share', async (req, res) => {
+    const { platform, timestamp } = req.body;
+    
+    // Points system for social sharing
+    const points = {
+      twitter: 5,
+      linkedin: 7, 
+      facebook: 6,
+      instagram: 8,
+      twitter_app: 5,
+      linkedin_app: 7,
+      facebook_app: 6,
+      instagram_app: 8,
+      twitter_results: 5,
+      linkedin_results: 7,
+      facebook_results: 6,
+      instagram_results: 8
+    };
+
+    const earnedPoints = points[platform as keyof typeof points] || 0;
+    
+    // Here you could save to database if needed
+    console.log(`Social share tracked: ${platform} at ${timestamp}, earned ${earnedPoints} points`);
+    
+    res.json({ 
+      success: true, 
+      platform,
+      points: earnedPoints,
+      timestamp 
+    });
+  });
+
+  // Check trial status for special formats
+  app.get("/api/trial-status", async (req, res) => {
+    try {
+      // Use the same session logic as the conversion endpoint
+      const sessionId = req.query.sessionId as string || req.sessionID;
+      const TRIAL_LIMIT = 5; // 5 free special format conversions
+      
+      // Get current trial usage from session
+      const sessionKey = `special_trial_${sessionId}`;
+      let trialUsage = 0;
+      
+      // In a real implementation, you'd store this in Redis or database
+      // For now, using in-memory storage (will reset on server restart)
+      if (!global.trialUsage) {
+        global.trialUsage = new Map();
+      }
+      
+      trialUsage = global.trialUsage.get(sessionKey) || 0;
+      const remaining = Math.max(0, TRIAL_LIMIT - trialUsage);
+      const allowed = remaining > 0;
+      
+      // Debug logging
+      console.log(`Trial status check - SessionID: ${sessionId}, SessionKey: ${sessionKey}, Usage: ${trialUsage}, Remaining: ${remaining}`);
+      
+      res.json({
+        allowed,
+        remaining,
+        total: TRIAL_LIMIT,
+        used: trialUsage,
+        message: remaining === 0 
+          ? "Free trial exhausted. Upgrade to premium for unlimited professional format conversions."
+          : `${remaining} free conversions remaining`
+      });
+    } catch (error) {
+      console.error("Trial status check error:", error);
+      res.status(500).json({ error: "Failed to check trial status" });
+    }
+  });
+
+  // Lead magnet email endpoint with abuse prevention and credit tracking
+  app.post('/api/lead-magnet', async (req, res) => {
+    try {
+      const { email, firstName } = req.body;
+      
+      if (!email || !email.includes('@')) {
+        return res.status(400).json({ error: 'Valid email address is required' });
+      }
+      
+      const ipAddress = req.ip || req.connection.remoteAddress || 'unknown';
+      const userAgent = req.headers['user-agent'] || 'unknown';
+      
+      // Check for existing signup with same email
+      const existingSignup = await storage.getLeadMagnetSignup(email);
+      if (existingSignup) {
+        return res.status(409).json({ 
+          error: 'Email already registered for free credits',
+          message: 'This email has already received the free credits and guide. Check your inbox or contact support.' 
+        });
+      }
+      
+      // Check for IP-based abuse (max 3 signups per IP per day)
+      const ipSignupCount = await storage.getLeadMagnetSignupCountByIP(ipAddress);
+      if (ipSignupCount >= 3) {
+        return res.status(429).json({ 
+          error: 'Too many signups from this location',
+          message: 'Maximum 3 signups per day from the same location. Please try again tomorrow.' 
+        });
+      }
+      
+      console.log(`Processing lead magnet signup for: ${email}`);
+      
+      // Create lead magnet signup record with 90-day credit expiry
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + 90); // Credits expire in 90 days
+      
+      const signupRecord = await storage.createLeadMagnetSignup({
+        email,
+        firstName: firstName || null,
+        ipAddress,
+        userAgent,
+        creditsGranted: 1000,
+        creditsUsed: 0,
+        status: 'active',
+        expiresAt,
+      });
+      
+      // Send email with improved deliverability
+      const success = await emailService.sendLeadMagnetGuide(email, firstName);
+      
+      if (success) {
+        console.log(`✓ Lead magnet guide sent successfully to ${email}`);
+        res.json({ 
+          success: true, 
+          message: 'Guide sent successfully! Check your email for your free credits and optimization guide.',
+          credits: 1000,
+          expiresAt: expiresAt.toISOString()
+        });
+      } else {
+        // If email fails, remove the signup record to allow retry
+        await storage.deleteLeadMagnetSignup(signupRecord.id);
+        console.error(`✗ Failed to send lead magnet guide to ${email}`);
+        res.status(500).json({ 
+          error: 'Failed to send guide. Please try again.' 
+        });
+      }
+    } catch (error) {
+      console.error('Lead magnet endpoint error:', error);
+      res.status(500).json({ error: 'Internal server error' });
+    }
+  });
+
+  // Test endpoint for email integration
+  app.post('/api/test-emails', async (req: any, res) => {
+    try {
+      const { emailType, testEmail } = req.body;
+      
+      if (!testEmail || !emailType) {
+        return res.status(400).json({ error: 'Email address and email type are required' });
+      }
+
+      let result;
+      const testFirstName = 'TestUser';
+
+      switch (emailType) {
+        case 'conversion_complete':
+          result = await emailService.sendSpecialFormatConversionComplete(
+            testEmail,
+            testFirstName,
+            {
+              filesProcessed: 3,
+              originalFormats: ['RAW', 'SVG', 'TIFF'],
+              outputFormat: 'jpeg',
+              totalOriginalSize: 15728640, // 15MB
+              totalConvertedSize: 3145728,  // 3MB
+              conversionTypes: ['RAW → JPEG', 'SVG → JPEG', 'TIFF → JPEG'],
+              isTrialUser: true,
+              trialRemaining: 2
+            }
+          );
+          break;
+
+        case 'trial_warning':
+          result = await emailService.sendSpecialFormatTrialWarning(
+            testEmail,
+            testFirstName,
+            4, // Used 4 of 5
+            5  // Total limit
+          );
+          break;
+
+        case 'trial_exhausted':
+          result = await emailService.sendSpecialFormatTrialExhausted(
+            testEmail,
+            testFirstName
+          );
+          break;
+
+        // === STANDARD FORMAT EMAIL TESTS ===
+        case 'standard_compression_complete':
+          result = await emailService.sendStandardCompressionComplete(
+            testEmail,
+            testFirstName,
+            {
+              filesProcessed: 5,
+              totalOriginalSize: 25165824,  // 24MB
+              totalCompressedSize: 3145728, // 3MB
+              averageCompressionRatio: 87,
+              qualityLevel: 85,
+              processingTime: 12,
+              filenames: ['vacation-photo-1.jpg', 'landscape-shot.jpg', 'portrait-selfie.jpg', 'product-image.jpg', 'event-group-photo.jpg'],
+              sizeSavings: '21MB (87% reduction)'
+            }
+          );
+          break;
+
+        case 'daily_limit_warning':
+          result = await emailService.sendDailyLimitWarning(
+            testEmail,
+            testFirstName,
+            {
+              used: 12,
+              limit: 15,
+              percentage: 80,
+              remainingHours: 6
+            }
+          );
+          break;
+
+        case 'upgrade_file_size':
+          result = await emailService.sendUpgradePromotion(
+            testEmail,
+            testFirstName,
+            'file_size_limit'
+          );
+          break;
+
+        case 'upgrade_daily_limit':
+          result = await emailService.sendUpgradePromotion(
+            testEmail,
+            testFirstName,
+            'daily_limit_reached'
+          );
+          break;
+
+        case 'upgrade_advanced_features':
+          result = await emailService.sendUpgradePromotion(
+            testEmail,
+            testFirstName,
+            'advanced_features'
+          );
+          break;
+
+        default:
+          return res.status(400).json({ 
+            error: 'Invalid email type. Use: conversion_complete, trial_warning, trial_exhausted, standard_compression_complete, daily_limit_warning, upgrade_file_size, upgrade_daily_limit, upgrade_advanced_features' 
+          });
+      }
+
+      res.json({
+        success: result,
+        message: result ? `${emailType} email sent successfully to ${testEmail}` : 'Failed to send email',
+        emailType,
+        recipient: testEmail
+      });
+
+    } catch (error) {
+      console.error('Email test error:', error);
+      res.status(500).json({ 
+        error: 'Failed to send test email',
+        message: error instanceof Error ? error.message : 'Unknown error'
+      });
+    }
+  });
+
+  // Special Format Conversion endpoint
+  app.post("/api/convert-special", specialUpload.array('files', 20), async (req, res) => {
+    try {
+      const files = req.files as Express.Multer.File[];
+      if (!files || files.length === 0) {
+        return res.status(400).json({ error: "No files uploaded" });
+      }
+
+      const { outputFormat, quality, resize, width, height, maintainAspect } = req.body;
+      if (!outputFormat) {
+        return res.status(400).json({ error: "Output format is required" });
+      }
+      
+      // Parse advanced quality settings
+      const qualityValue = quality ? parseInt(quality, 10) : 85;
+      const shouldResize = resize === 'true';
+      const customWidth = width ? parseInt(width, 10) : 2560;
+      const customHeight = height ? parseInt(height, 10) : 2560;
+      const maintainAspectRatio = maintainAspect !== 'false';
+
+      // Check if user is authenticated
+      const isUserAuthenticated = req.isAuthenticated && req.isAuthenticated();
+      const user = isUserAuthenticated ? req.user : null;
+      const sessionId = req.body.sessionId || req.sessionID;
+      const userId = user?.id || null;
+
+      // Check if user has premium subscription for special formats
+      let isPremiumUser = false;
+      if (isUserAuthenticated && user && user.stripeSubscriptionId) {
+        try {
+          const subscription = await stripe.subscriptions.retrieve(user.stripeSubscriptionId);
+          isPremiumUser = subscription.status === 'active';
+        } catch (error) {
+          console.warn('Failed to check subscription status:', error);
+        }
+      }
+      
+      // Check trial limits for guest users
+      if (!isUserAuthenticated) {
+        const sessionKey = `special_trial_${sessionId}`;
+        const TRIAL_LIMIT = 5;
+        
+        if (!global.trialUsage) {
+          global.trialUsage = new Map();
+        }
+        
+        const trialUsage = global.trialUsage.get(sessionKey) || 0;
+        const remaining = Math.max(0, TRIAL_LIMIT - trialUsage);
+        
+        if (remaining <= 0) {
+          return res.status(403).json({ 
+            error: "Trial limit exceeded", 
+            message: "Free trial exhausted. Upgrade to premium for unlimited professional format conversions.",
+            requiresUpgrade: true 
+          });
+        }
+      }
+
+      // Special formats require premium subscription for authenticated users
+      // Allow guest users with trial limits
+      if (isUserAuthenticated && !isPremiumUser) {
+        return res.status(403).json({ 
+          error: "Premium subscription required", 
+          message: "Special format conversions require a premium subscription. Please upgrade to continue.",
+          requiresUpgrade: true 
+        });
+      }
+
+      // Get user tier configuration  
+      const userTier = getUserTier(user);
+
+      // TEMPORARY: Disable file size checks for testing
+      // Check file size limits (special formats may be larger)
+      // for (const file of files) {
+      //   const fileSizeCheck = checkFileLimit(user, file.size);
+      //   if (!fileSizeCheck.allowed) {
+      //     return res.status(400).json({ 
+      //       error: "File size limit exceeded", 
+      //       message: fileSizeCheck.message,
+      //       userTier: userTier.displayName 
+      //     });
+      //   }
+      // }
+
+      // Check batch limits
+      if (files.length > 20) {
+        return res.status(400).json({ 
+          error: "Batch size limit exceeded", 
+          message: "Maximum 20 files per batch",
+          userTier: userTier.displayName 
+        });
+      }
+
+      const results = [];
+      console.log(`Processing ${files.length} special format conversions for user ${userId || 'guest'}`);
+
+      // Process each file
+      for (const file of files) {
+        try {
+          const jobId = randomUUID();
+          const originalFormat = getFileFormat(file.originalname);
+          
+          // Determine output extension
+          const outputExtension = outputFormat === 'jpeg' ? 'jpg' : outputFormat;
+          const outputPath = path.join("converted", `${jobId}.${outputExtension}`);
+
+          console.log(`Converting ${file.originalname} (${originalFormat}) to ${outputFormat}`);
+          console.log(`Input file path: ${file.path}`);
+          console.log(`Output file path: ${outputPath}`);
+
+          // Get original file size before processing (in case file gets modified)
+          const originalStats = await fs.stat(file.path);
+          console.log(`Original file size: ${originalStats.size} bytes`);
+
+          // Process the conversion based on input format
+          const conversionResult = await processSpecialFormatConversion(
+            file.path,
+            outputPath,
+            originalFormat,
+            outputFormat,
+            {
+              quality: qualityValue,
+              resize: shouldResize,
+              width: customWidth,
+              height: customHeight,
+              maintainAspect: maintainAspectRatio
+            }
+          );
+          const convertedStats = await fs.stat(outputPath);
+          
+          // For special format conversions, skip database operations to prevent crashes
+          // Just create a simple job object with the conversion results
+          const job = {
+            id: jobId,
+            originalFilename: file.originalname,
+            originalSize: originalStats.size,
+            compressedSize: convertedStats.size,
+            outputFormat,
+            status: 'completed'
+          };
+          
+          console.log(`Conversion completed: ${file.originalname} -> ${outputPath}`);
+
+          results.push({
+            id: job.id,
+            originalName: file.originalname,
+            originalSize: originalStats.size,
+            convertedSize: convertedStats.size,
+            originalFormat,
+            outputFormat,
+            status: 'completed'
+          });
+
+          console.log(`Successfully converted ${file.originalname}: ${originalStats.size} → ${convertedStats.size} bytes`);
+
+          // Increment trial usage for guest users
+          if (!isUserAuthenticated) {
+            const sessionKey = `special_trial_${sessionId}`;
+            const currentUsage = global.trialUsage.get(sessionKey) || 0;
+            const newUsage = currentUsage + 1;
+            global.trialUsage.set(sessionKey, newUsage);
+            console.log(`Trial usage incremented - SessionID: ${sessionId}, SessionKey: ${sessionKey}, Usage: ${newUsage}/5`);
+            
+            // Send trial warning email when reaching 80% usage (4/5)
+            if (newUsage === 4) {
+              console.log('Trial warning threshold reached (4/5 conversions used)');
+              // Email functionality ready - when we collect guest emails:
+              // try {
+              //   await emailService.sendSpecialFormatTrialWarning(guestEmail, 'User', newUsage, 5);
+              // } catch (emailError) {
+              //   console.error('Failed to send trial warning email:', emailError);
+              // }
+            }
+            
+            // Send trial exhausted email when limit is reached (5/5)
+            if (newUsage >= 5) {
+              console.log('Trial limit exhausted - sending notification email');
+              // Email functionality ready - when we collect guest emails:
+              // try {
+              //   await emailService.sendSpecialFormatTrialExhausted(guestEmail, 'User');
+              // } catch (emailError) {
+              //   console.error('Failed to send trial exhausted email:', emailError);
+              // }
+            }
+          }
+        } catch (error) {
+          console.error(`Failed to convert ${file.originalname}:`, error);
+          results.push({
+            originalName: file.originalname,
+            status: 'failed',
+            error: error instanceof Error ? error.message : 'Unknown error'
+          });
+        }
+      }
+
+      // Send email notification for successful conversions (if any)
+      const completedResults = results.filter(r => r.status === 'completed');
+      if (completedResults.length > 0) {
+        // Calculate totals for email
+        const totalOriginalSize = completedResults.reduce((sum, r) => sum + (r.originalSize || 0), 0);
+        const totalConvertedSize = completedResults.reduce((sum, r) => sum + (r.convertedSize || 0), 0);
+        const originalFormats = [...new Set(completedResults.map(r => r.originalFormat).filter(Boolean))];
+        const conversionTypes = originalFormats.map(format => `${format?.toUpperCase()} → ${outputFormat.toUpperCase()}`);
+        
+        // Get trial status for email content
+        const sessionKey = `special_trial_${sessionId}`;
+        const currentTrialUsage = global.trialUsage?.get(sessionKey) || 0;
+        const trialRemaining = Math.max(0, 5 - currentTrialUsage);
+        
+        // Send email notification for guest users or authenticated users with email
+        const shouldSendEmail = !isUserAuthenticated; // For now, only send to guest users
+        
+        if (shouldSendEmail) {
+          // For guest users, we don't have email - could be enhanced to collect email for notifications
+          console.log('Email notification skipped for guest user (no email collected)');
+          
+          // When we have email collection for guest users or authenticated users:
+          // try {
+          //   await emailService.sendSpecialFormatConversionComplete(
+          //     userEmail,
+          //     firstName || 'User',
+          //     {
+          //       filesProcessed: completedResults.length,
+          //       originalFormats,
+          //       outputFormat,
+          //       totalOriginalSize,
+          //       totalConvertedSize,
+          //       conversionTypes,
+          //       isTrialUser: !isUserAuthenticated,
+          //       trialRemaining
+          //     }
+          //   );
+          // } catch (emailError) {
+          //   console.error('Failed to send conversion completion email:', emailError);
+          // }
+        }
+      }
+
+      res.json({
+        message: `Processed ${files.length} file(s)`,
+        results,
+        userTier: userTier.displayName,
+        totalFilesProcessed: completedResults.length
+      });
+
+    } catch (error) {
+      console.error("Special format conversion error:", error);
+      res.status(500).json({ 
+        error: "Failed to process special format conversion",
+        message: error instanceof Error ? error.message : "Unknown error"
+      });
+    }
+  });
+
+  // Special format checkout endpoints
+  app.post('/api/special-format/create-checkout', async (req, res) => {
+    try {
+      const { packageType } = req.body;
+      
+      const packages = {
+        'special-pro-starter': {
+          name: 'Pro Starter - Special Formats',
+          price: 1500, // $15.00
+          conversions: 50,
+          description: '50 professional format conversions, up to 100MB file size'
+        },
+        'special-pro-standard': {
+          name: 'Pro Standard - Special Formats',
+          price: 4000, // $40.00
+          conversions: 150,
+          description: '150 professional format conversions, up to 200MB file size, priority processing'
+        },
+        'special-pro-enterprise': {
+          name: 'Pro Enterprise - Special Formats',
+          price: 12000, // $120.00
+          conversions: 500,
+          description: '500 professional format conversions, unlimited file size, API access'
+        }
+      };
+      
+      const selectedPackage = packages[packageType as keyof typeof packages];
+      if (!selectedPackage) {
+        return res.status(400).json({ error: 'Invalid package type' });
+      }
+      
+      // Create Stripe checkout session
+      const session = await stripe.checkout.sessions.create({
+        payment_method_types: ['card'],
+        line_items: [{
+          price_data: {
+            currency: 'usd',
+            product_data: {
+              name: selectedPackage.name,
+              description: selectedPackage.description,
+            },
+            unit_amount: selectedPackage.price,
+          },
+          quantity: 1,
+        }],
+        mode: 'payment',
+        success_url: `${req.headers.origin}/success?session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${req.headers.origin}/special-formats`,
+        metadata: {
+          package_type: packageType,
+          conversions: selectedPackage.conversions.toString(),
+        },
+      });
+      
+      res.json({ url: session.url });
+    } catch (error: any) {
+      console.error('Error creating special format checkout session:', error);
+      res.status(500).json({ error: 'Failed to create checkout session' });
+    }
+  });
+
+  // Special format download endpoints
+  app.get("/api/download-special/:fileId", async (req, res) => {
+    try {
+      const fileId = req.params.fileId;
+      const outputPath = path.join("converted", `${fileId}.jpg`); // Default to jpg, but check for other formats too
+      
+      // Try different extensions if jpg doesn't exist
+      const possibleExtensions = ['jpg', 'jpeg', 'png', 'webp', 'tiff', 'avif'];
+      let actualPath = null;
+      
+      for (const ext of possibleExtensions) {
+        const testPath = path.join("converted", `${fileId}.${ext}`);
+        try {
+          await fs.access(testPath);
+          actualPath = testPath;
+          break;
+        } catch (e) {
+          // File doesn't exist, try next extension
+        }
+      }
+      
+      if (!actualPath) {
+        return res.status(404).json({ error: "Converted file not found" });
+      }
+      
+      const stats = await fs.stat(actualPath);
+      const filename = path.basename(actualPath);
+      
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}"`);
+      res.setHeader('Content-Type', 'application/octet-stream');
+      res.setHeader('Content-Length', stats.size);
+      
+      const stream = createReadStream(actualPath);
+      stream.pipe(res);
+      
+      stream.on('error', (streamError) => {
+        console.error('Special format download stream error:', streamError);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Failed to download file' });
+        }
+      });
+    } catch (error) {
+      console.error("Special format download error:", error);
+      res.status(500).json({ error: "Failed to download file" });
+    }
+  });
+
+  // Special format ZIP download endpoint
+  app.post("/api/download-zip-special", async (req, res) => {
+    try {
+      const { fileIds } = req.body;
+      if (!fileIds || !Array.isArray(fileIds) || fileIds.length === 0) {
+        return res.status(400).json({ error: "File IDs array is required" });
+      }
+
+      // Find all converted files
+      const validFiles = [];
+      const possibleExtensions = ['jpg', 'jpeg', 'png', 'webp', 'tiff', 'avif'];
+      
+      for (const fileId of fileIds) {
+        for (const ext of possibleExtensions) {
+          const filePath = path.join("converted", `${fileId}.${ext}`);
+          try {
+            await fs.access(filePath);
+            const stats = await fs.stat(filePath);
+            validFiles.push({
+              path: filePath,
+              name: `${fileId}.${ext}`,
+              size: stats.size
+            });
+            break; // Found the file, no need to try other extensions
+          } catch (e) {
+            // File doesn't exist, try next extension
+          }
+        }
+      }
+
+      if (validFiles.length === 0) {
+        return res.status(404).json({ error: "No converted files found" });
+      }
+
+      // Set response headers for ZIP download
+      const zipFilename = `special_converted_files_${Date.now()}.zip`;
+      res.setHeader('Content-Type', 'application/zip');
+      res.setHeader('Content-Disposition', `attachment; filename="${zipFilename}"`);
+
+      // Create ZIP archive
+      const archive = archiver('zip', {
+        zlib: { level: 9 } // Maximum compression
+      });
+
+      archive.on('error', (err) => {
+        console.error('Archive error:', err);
+        if (!res.headersSent) {
+          res.status(500).json({ error: 'Failed to create ZIP archive' });
+        }
+      });
+
+      // Pipe archive to response
+      archive.pipe(res);
+
+      // Add files to archive
+      for (const file of validFiles) {
+        archive.file(file.path, { name: file.name });
+      }
+
+      // Finalize the archive
+      await archive.finalize();
+      console.log(`Special format ZIP download completed for ${validFiles.length} files`);
+
+    } catch (error) {
+      console.error("Special format ZIP download error:", error);
+      if (!res.headersSent) {
+        res.status(500).json({ error: "Failed to create ZIP archive" });
+      }
+    }
+  });
+
+  // =====================================
+  // WEB CREDIT PURCHASE ROUTES
+  // =====================================
+
+  // Get available credit packages
+  app.get('/api/credit-packages', (req, res) => {
+    try {
+      res.json({
+        success: true,
+        packages: CREDIT_PACKAGES.map(pkg => ({
+          id: pkg.id,
+          name: pkg.name,
+          credits: pkg.credits,
+          price: pkg.price,
+          pricePerCredit: pkg.pricePerCredit,
+          savings: pkg.savings,
+          popular: pkg.popular,
+          displayPrice: `$${(pkg.price / 100).toFixed(2)}`,
+          displayPricePerCredit: `$${(pkg.pricePerCredit / 10000).toFixed(4)}`
+        }))
+      });
+    } catch (error) {
+      console.error('Error fetching credit packages:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch credit packages'
+      });
+    }
+  });
+
+  // Create payment intent for credit package purchase
+  app.post('/api/purchase-credits', async (req, res) => {
+    try {
+      const { packageId, customerEmail, customerName } = req.body;
+      
+      if (!packageId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Package ID is required'
+        });
+      }
+
+      // Find the credit package
+      const creditPackage = CREDIT_PACKAGES.find(pkg => pkg.id === packageId);
+      if (!creditPackage) {
+        return res.status(400).json({
+          success: false,
+          message: 'Invalid package ID'
+        });
+      }
+
+      // Check if user is authenticated
+      const isUserAuthenticated = req.isAuthenticated && req.isAuthenticated();
+      const user = isUserAuthenticated ? req.user : null;
+      const userId = user?.id || null;
+      const sessionId = req.sessionID;
+
+      // Create purchase record
+      const [purchase] = await db.insert(creditPurchases).values({
+        userId,
+        sessionId,
+        packageId: creditPackage.id,
+        packageName: creditPackage.name,
+        credits: creditPackage.credits,
+        price: creditPackage.price,
+        pricePerCredit: creditPackage.pricePerCredit,
+        status: 'pending'
+      }).returning();
+
+      // Create Stripe payment intent
+      const paymentIntent = await stripe.paymentIntents.create({
+        amount: creditPackage.price,
+        currency: 'usd',
+        metadata: {
+          purchaseId: purchase.id,
+          packageId: creditPackage.id,
+          packageName: creditPackage.name,
+          credits: creditPackage.credits.toString(),
+          userId: userId || 'guest',
+          customerEmail: customerEmail || user?.email || ''
+        },
+        description: `${creditPackage.name} - ${creditPackage.credits} credits`
+      });
+
+      // Update purchase with payment intent ID
+      await db.update(creditPurchases)
+        .set({ stripePaymentIntentId: paymentIntent.id })
+        .where(eq(creditPurchases.id, purchase.id));
+
+      res.json({
+        success: true,
+        clientSecret: paymentIntent.client_secret,
+        purchaseId: purchase.id,
+        package: {
+          id: creditPackage.id,
+          name: creditPackage.name,
+          credits: creditPackage.credits,
+          price: creditPackage.price,
+          displayPrice: `$${(creditPackage.price / 100).toFixed(2)}`
+        }
+      });
+
+    } catch (error) {
+      console.error('Error creating payment intent for credits:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to create payment intent'
+      });
+    }
+  });
+
+  // Confirm credit purchase after successful payment
+  app.post('/api/confirm-credit-purchase', async (req, res) => {
+    try {
+      const { purchaseId, paymentIntentId } = req.body;
+      
+      if (!purchaseId || !paymentIntentId) {
+        return res.status(400).json({
+          success: false,
+          message: 'Purchase ID and Payment Intent ID are required'
+        });
+      }
+
+      // Verify payment with Stripe
+      const paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
+      
+      if (paymentIntent.status !== 'succeeded') {
+        return res.status(400).json({
+          success: false,
+          message: 'Payment not successful'
+        });
+      }
+
+      // Get purchase record
+      const [purchase] = await db.select()
+        .from(creditPurchases)
+        .where(eq(creditPurchases.id, purchaseId))
+        .limit(1);
+
+      if (!purchase) {
+        return res.status(404).json({
+          success: false,
+          message: 'Purchase not found'
+        });
+      }
+
+      if (purchase.status === 'completed') {
+        return res.status(400).json({
+          success: false,
+          message: 'Purchase already completed'
+        });
+      }
+
+      // Update purchase status
+      await db.update(creditPurchases)
+        .set({ 
+          status: 'completed',
+          completedAt: new Date()
+        })
+        .where(eq(creditPurchases.id, purchaseId));
+
+      // Add credits to user account if authenticated
+      if (purchase.userId) {
+        await db.update(users)
+          .set({ 
+            purchasedCredits: sql`${users.purchasedCredits} + ${purchase.credits}`
+          })
+          .where(eq(users.id, purchase.userId));
+      }
+
+      // Send confirmation email
+      try {
+        const customerEmail = paymentIntent.metadata.customerEmail;
+        if (customerEmail) {
+          await emailService.sendCreditPurchaseConfirmation(
+            customerEmail,
+            purchase.packageName,
+            purchase.credits,
+            purchase.price
+          );
+        }
+      } catch (emailError) {
+        console.error('Failed to send credit purchase confirmation email:', emailError);
+        // Don't fail the purchase if email fails
+      }
+
+      res.json({
+        success: true,
+        message: 'Credit purchase confirmed successfully',
+        purchase: {
+          id: purchase.id,
+          packageName: purchase.packageName,
+          credits: purchase.credits,
+          price: purchase.price,
+          status: 'completed'
+        }
+      });
+
+    } catch (error) {
+      console.error('Error confirming credit purchase:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to confirm purchase'
+      });
+    }
+  });
+
+  // Get user credit balance
+  app.get('/api/credit-balance', isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      
+      const [userRecord] = await db.select({
+        purchasedCredits: users.purchasedCredits,
+        totalCreditsUsed: users.totalCreditsUsed
+      })
+      .from(users)
+      .where(eq(users.id, user.id))
+      .limit(1);
+
+      if (!userRecord) {
+        return res.status(404).json({
+          success: false,
+          message: 'User not found'
+        });
+      }
+
+      const availableCredits = (userRecord.purchasedCredits || 0) - (userRecord.totalCreditsUsed || 0);
+      
+      res.json({
+        success: true,
+        balance: {
+          purchasedCredits: userRecord.purchasedCredits || 0,
+          usedCredits: userRecord.totalCreditsUsed || 0,
+          availableCredits: Math.max(0, availableCredits),
+          displayBalance: Math.max(0, availableCredits).toLocaleString()
+        }
+      });
+
+    } catch (error) {
+      console.error('Error fetching credit balance:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch credit balance'
+      });
+    }
+  });
+
+  // Get purchase history
+  app.get('/api/purchase-history', isAuthenticated, async (req, res) => {
+    try {
+      const user = req.user as any;
+      
+      const purchases = await db.select()
+        .from(creditPurchases)
+        .where(eq(creditPurchases.userId, user.id))
+        .orderBy(sql`${creditPurchases.createdAt} DESC`);
+
+      res.json({
+        success: true,
+        purchases: purchases.map(purchase => ({
+          id: purchase.id,
+          packageName: purchase.packageName,
+          credits: purchase.credits,
+          price: purchase.price,
+          displayPrice: `$${(purchase.price / 100).toFixed(2)}`,
+          status: purchase.status,
+          purchaseDate: purchase.createdAt,
+          completedDate: purchase.completedAt
+        }))
+      });
+
+    } catch (error) {
+      console.error('Error fetching purchase history:', error);
+      res.status(500).json({
+        success: false,
+        message: 'Failed to fetch purchase history'
+      });
+    }
+  });
+
+  const httpServer = createServer(app);
+  return httpServer;
+}
+
+// Helper functions for social sharing and rewards
+function generateReferralCode(): string {
+  const characters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+  let result = '';
+  for (let i = 0; i < 8; i++) {
+    result += characters.charAt(Math.floor(Math.random() * characters.length));
+  }
+  return result;
+}
+
+function calculateDiscountFromPoints(points: number): number {
+  if (points >= 100) return 25; // 25% discount for 100+ points
+  if (points >= 50) return 15;  // 15% discount for 50+ points  
+  if (points >= 20) return 10;  // 10% discount for 20+ points
+  if (points >= 10) return 5;   // 5% discount for 10+ points
+  return 0; // No discount under 10 points
+}
+
+interface CompressionOptions {
+  qualityLevel: string;
+  resizeOption: string;
+  outputFormat: string; // 'jpeg', 'png', 'webp'
+  customQuality: number;
+  compressionAlgorithm: string;
+  optimizeForWeb: boolean;
+  progressiveJpeg: boolean;
+  optimizeScans: boolean;
+  arithmeticCoding: boolean;
+  customWidth?: number;
+  customHeight?: number;
+  fastMode?: boolean; // New: enable fast mode for bulk uploads
+  pngCompressionLevel?: number; // 0-9 for PNG compression
+  pngOptimization?: 'speed' | 'size'; // PNG optimization strategy
+}
+
+async function compressImage(
+  jobId: string,
+  file: Express.Multer.File,
+  options: CompressionOptions
+) {
+  try {
+    console.log(`Starting advanced compression for job ${jobId} with algorithm: ${options.compressionAlgorithm}`);
+    
+    // Update job status to processing
+    await storage.updateCompressionJob(jobId, { status: "processing" });
+    console.log(`Updated job ${jobId} status to processing`);
+
+    // Use custom quality or fallback to quality level
+    let quality = options.customQuality;
+    if (!quality) {
+      switch (options.qualityLevel) {
+        case "high":
+          quality = 85;
+          break;
+        case "medium":
+          quality = 75;
+          break;
+        case "low":
+          quality = 50;
+          break;
+        default:
+          quality = 75;
+      }
+    }
+
+    // Set up Sharp pipeline with advanced options
+    let sharpInstance = sharp(file.path, {
+      // Enable advanced processing
+      unlimited: true,
+      sequentialRead: true
+    });
+
+    // Get original image metadata
+    const metadata = await sharpInstance.metadata();
+    console.log(`Image metadata for job ${jobId}:`, { 
+      width: metadata.width, 
+      height: metadata.height,
+      format: metadata.format,
+      colorSpace: metadata.space,
+      hasAlpha: metadata.hasAlpha
+    });
+
+    // Fast mode always enabled for maximum speed
+    console.log(`Fast mode enabled for job ${jobId} - minimal processing for speed`);
+    // Skipping all expensive operations for speed
+    
+    // Apply advanced resize options
+    if (options.resizeOption !== "none" && metadata.width && metadata.height) {
+      let targetWidth: number, targetHeight: number;
+      
+      if (options.resizeOption === "custom" && options.customWidth && options.customHeight) {
+        targetWidth = options.customWidth;
+        targetHeight = options.customHeight;
+      } else {
+        const scale = parseFloat(options.resizeOption) / 100;
+        targetWidth = Math.round(metadata.width * scale);
+        targetHeight = Math.round(metadata.height * scale);
+      }
+      
+      // Use advanced resampling for better quality
+      sharpInstance = sharpInstance.resize(targetWidth, targetHeight, {
+        kernel: options.fastMode ? sharp.kernel.nearest : sharp.kernel.lanczos3, // Fast vs high-quality resampling
+        withoutEnlargement: true,
+        withoutReduction: false
+      });
+    }
+
+    // Determine output format and extension
+    let fileExtension: string;
+    let mimeType: string;
+    
+    switch (options.outputFormat) {
+      case "png":
+        fileExtension = "png";
+        mimeType = "image/png";
+        break;
+      case "webp":
+        fileExtension = "webp";
+        mimeType = "image/webp";
+        break;
+      case "avif":
+        fileExtension = "avif";
+        mimeType = "image/avif";
+        break;
+      default:
+        fileExtension = "jpg";
+        mimeType = "image/jpeg";
+    }
+    
+    const outputPath = path.join("compressed", `${jobId}.${fileExtension}`);
+    console.log(`Output path for job ${jobId}: ${outputPath}`);
+    
+    // Apply format-specific compression with advanced options
+    if (options.outputFormat === "png") {
+      // PNG compression with optimization
+      const pngOptions: any = {
+        compressionLevel: options.pngCompressionLevel || 6, // 0-9, 6 is default
+        quality: quality >= 95 ? undefined : quality, // Only use quality for lossy PNG
+        effort: options.pngOptimization === 'size' ? 10 : 4, // Higher effort for smaller files
+        palette: quality < 80, // Use palette for aggressive compression
+        colors: quality < 60 ? 64 : quality < 80 ? 128 : 256, // Reduce colors for smaller files
+        dither: 1.0 // Add dithering to reduce banding
+      };
+      
+      // Progressive PNG for larger images
+      if (metadata.width && metadata.height && metadata.width * metadata.height > 500000) {
+        pngOptions.progressive = true;
+      }
+      
+      sharpInstance = sharpInstance.png(pngOptions);
+    } else if (options.outputFormat === "webp") {
+      sharpInstance = sharpInstance.webp({
+        quality,
+        effort: 6, // Maximum compression effort
+        lossless: quality >= 95,
+        nearLossless: quality >= 90 && quality < 95,
+        smartSubsample: true
+      });
+    } else if (options.outputFormat === "avif") {
+      sharpInstance = sharpInstance.avif({
+        quality,
+        effort: 9, // Maximum compression effort
+        lossless: quality >= 95,
+        chromaSubsampling: quality < 90 ? '4:2:0' : '4:4:4'
+      });
+    } else {
+      // JPEG compression options (optimized for fast mode)
+      const jpegOptions: any = {
+        quality,
+        mozjpeg: options.fastMode ? false : (options.compressionAlgorithm === "mozjpeg"), // Skip MozJPEG for speed
+        progressive: options.fastMode ? false : (options.progressiveJpeg || options.compressionAlgorithm === "progressive"),
+        optimiseScans: options.fastMode ? false : options.optimizeScans,
+        overshootDeringing: true, // Reduce ringing artifacts
+        trellisQuantisation: options.compressionAlgorithm === "mozjpeg"
+      };
+      
+      // Advanced JPEG features
+      if (options.arithmeticCoding && options.compressionAlgorithm === "mozjpeg") {
+        jpegOptions.arithmeticCoding = true;
+      }
+      
+      // Optimize for web: use 4:2:0 chroma subsampling for smaller files
+      if (options.optimizeForWeb && quality < 85) {
+        jpegOptions.chromaSubsampling = '4:2:0';
+      } else if (quality >= 85) {
+        jpegOptions.chromaSubsampling = '4:4:4'; // Better quality
+      }
+      
+      sharpInstance = sharpInstance.jpeg(jpegOptions);
+    }
+
+    // Apply final optimizations
+    if (options.optimizeForWeb) {
+      // Optimize for web delivery
+      sharpInstance = sharpInstance
+        .withMetadata({})
+        .normalize(); // Normalize color space for web
+    }
+
+    // Compress and save with performance monitoring
+    const startTime = Date.now();
+    await sharpInstance.toFile(outputPath);
+    const compressionTime = Date.now() - startTime;
+    
+    console.log(`Compression completed for job ${jobId} in ${compressionTime}ms using ${options.compressionAlgorithm} algorithm`);
+    console.log(`Advanced compression completed for job ${jobId}, file saved to ${outputPath}`);
+
+    // Get compressed file size
+    const stats = await fs.stat(outputPath);
+    const compressedSize = stats.size;
+    const compressionRatio = Math.round(((file.size - compressedSize) / file.size) * 100);
+    // Calculate compression metrics
+    const compressionEfficiency = compressionRatio > 0 ? 'Excellent' : 
+                                 compressionRatio > -10 ? 'Good' : 'Limited';
+    
+    console.log(`Job ${jobId} - Original: ${file.size} bytes, Compressed: ${compressedSize} bytes`);
+    console.log(`Compression ratio: ${compressionRatio}% (${compressionEfficiency}), Algorithm: ${options.compressionAlgorithm}`);
+    console.log(`Quality setting: ${quality}%, Web optimized: ${options.optimizeForWeb}`);
+
+    // Update job with comprehensive results (complete immediately)
+    const updatedJob = await storage.updateCompressionJob(jobId, {
+      status: "completed",
+      compressedSize,
+      compressionRatio,
+      compressedPath: outputPath,
+      // Store compression settings for reference
+      qualityLevel: options.qualityLevel,
+      resizeOption: options.resizeOption,
+      outputFormat: options.outputFormat
+    });
+    console.log(`Successfully updated job ${jobId} to completed status with ${options.compressionAlgorithm} compression`);
+    
+    // Generate optimization insights
+    const optimizationInsights = generateOptimizationInsights({
+      originalSize: file.size,
+      compressedSize,
+      compressionRatio,
+      quality,
+      algorithm: options.compressionAlgorithm,
+      webOptimized: options.optimizeForWeb
+    });
+    
+    console.log(`Optimization insights for job ${jobId}:`, optimizationInsights.join('; '));
+    
+    // Log compression analytics
+    if (compressionRatio > 0) {
+      console.log(`✅ Successful compression: ${compressionRatio}% size reduction`);
+    } else {
+      console.log(`⚠️ File size increased by ${Math.abs(compressionRatio)}% - consider different settings`);
+    }
+
+    // Calculate quality metrics in background (non-blocking) with timeout
+    setTimeout(() => {
+      calculateQualityMetricsInBackground(jobId, file.path, outputPath).catch(error => {
+        console.warn(`Quality analysis skipped for job ${jobId}:`, error.message);
+      });
+    }, 100); // Small delay to prevent blocking compression completion
+
+  } catch (error) {
+    console.error(`Compression failed for job ${jobId}:`, error);
+    await storage.updateCompressionJob(jobId, {
+      status: "failed",
+      errorMessage: error instanceof Error ? error.message : "Unknown error",
+    });
+  }
+}
+
+// Helper function to detect file format
+function getFileFormat(filename: string): string {
+  const ext = filename.split('.').pop()?.toLowerCase() || '';
+  
+  // RAW formats
+  const rawFormats = ['cr2', 'nef', 'arw', 'dng', 'orf', 'raf', 'pef', 'crw', 'erf', 'dcr', 'k25', 'kdc', 'mrw', 'raw', 'sr2', 'srf'];
+  if (rawFormats.includes(ext)) return 'raw';
+  
+  // Standard formats
+  if (ext === 'svg') return 'svg';
+  if (['tiff', 'tif'].includes(ext)) return 'tiff';
+  
+  return ext;
+}
+
+const execAsync = promisify(exec);
+
+// Helper functions for special format trial tracking
+async function getOrCreateTrialRecord(ipAddress: string, userAgent: string, browserFingerprint?: string): Promise<SpecialFormatTrial> {
+  const now = new Date();
+  const tomorrow = new Date(now.getTime() + 24 * 60 * 60 * 1000); // 24 hours from now
+  
+  // First, clean up expired records
+  await db.delete(specialFormatTrials).where(
+    gt(now, specialFormatTrials.expiresAt)
+  );
+
+  // Try to find existing trial record
+  const [existingTrial] = await db
+    .select()
+    .from(specialFormatTrials)
+    .where(and(
+      eq(specialFormatTrials.ipAddress, ipAddress),
+      eq(specialFormatTrials.userAgent, userAgent || '')
+    ))
+    .limit(1);
+
+  if (existingTrial) {
+    return existingTrial;
+  }
+
+  // Create new trial record
+  const [newTrial] = await db
+    .insert(specialFormatTrials)
+    .values({
+      ipAddress,
+      userAgent: userAgent || '',
+      browserFingerprint: browserFingerprint || '',
+      conversionsUsed: 0,
+      maxConversions: 3,
+      expiresAt: tomorrow,
+    })
+    .returning();
+
+  return newTrial;
+}
+
+async function checkTrialLimit(ipAddress: string, userAgent: string, browserFingerprint?: string): Promise<{
+  allowed: boolean;
+  remaining: number;
+  total: number;
+  message?: string;
+}> {
+  const trial = await getOrCreateTrialRecord(ipAddress, userAgent, browserFingerprint);
+  
+  const remaining = trial.maxConversions - trial.conversionsUsed;
+  
+  if (remaining <= 0) {
+    return {
+      allowed: false,
+      remaining: 0,
+      total: trial.maxConversions,
+      message: "Trial limit reached. Upgrade to continue converting special formats."
+    };
+  }
+
+  return {
+    allowed: true,
+    remaining,
+    total: trial.maxConversions
+  };
+}
+
+async function incrementTrialUsage(ipAddress: string, userAgent: string): Promise<void> {
+  await db
+    .update(specialFormatTrials)
+    .set({
+      conversionsUsed: sql`${specialFormatTrials.conversionsUsed} + 1`,
+      lastUsed: new Date(),
+    })
+    .where(and(
+      eq(specialFormatTrials.ipAddress, ipAddress),
+      eq(specialFormatTrials.userAgent, userAgent || '')
+    ));
+}
+
+// Special format conversion processor
+async function processSpecialFormatConversion(
+  inputPath: string,
+  outputPath: string,
+  inputFormat: string,
+  outputFormat: string,
+  options: {
+    quality: number;
+    resize: boolean;
+    width: number;
+    height: number;
+    maintainAspect: boolean;
+  } = {
+    quality: 85,
+    resize: false,
+    width: 2560,
+    height: 2560,
+    maintainAspect: true
+  }
+): Promise<{ success: boolean; outputSize: number }> {
+  
+  // Ensure output directory exists
+  const outputDir = path.dirname(outputPath);
+  await fs.mkdir(outputDir, { recursive: true });
+
+  let sharpInstance: sharp.Sharp;
+
+  try {
+    // Handle different input formats
+    if (inputFormat === 'raw') {
+      // For RAW files, use dcraw to extract to PPM, then convert with ImageMagick
+      // This bypasses ImageMagick's TIFF parsing issues with RAW files
+      console.log(`Converting RAW file ${inputPath} to ${outputFormat} using dcraw_emu + ImageMagick...`);
+      
+      // Verify input file exists before conversion
+      const inputExists = await fs.access(inputPath).then(() => true).catch(() => false);
+      console.log(`Input file exists: ${inputExists}`);
+      
+      // Step 1: Use dcraw_emu (from libraw) to extract RAW to PPM format (uncompressed RGB)
+      const tempPpmPath = inputPath + '_temp.ppm';
+      const dcrawCommand = `dcraw_emu -w -T "${inputPath}"`;
+      console.log(`Running dcraw_emu command: ${dcrawCommand}`);
+      await execAsync(dcrawCommand);
+      
+      // dcraw_emu creates a .tiff file with the same base name
+      const baseName = inputPath.replace(/\.[^/.]+$/, "");
+      const tempTiffPath = baseName + '.tiff';
+      console.log(`Expected TIFF output: ${tempTiffPath}`);
+      
+      // Verify TIFF file was created
+      const tiffExists = await fs.access(tempTiffPath).then(() => true).catch(() => false);
+      console.log(`TIFF file created: ${tiffExists}`);
+      
+      // Step 2: Convert TIFF to final format using ImageMagick with compression
+      let convertCommand;
+      // NO RESIZE - keep full resolution for proper 5MB files
+      const resizeParam = options.resize ? `-resize "${options.width}x${options.height}>"` : '';
+      
+      switch (outputFormat) {
+        case 'jpeg':
+          convertCommand = `convert "${tempTiffPath}" -quality ${options.quality} ${resizeParam} "${outputPath}"`;
+          break;
+        case 'png':
+          convertCommand = `convert "${tempTiffPath}" -define png:compression-level=8 ${resizeParam} "${outputPath}"`;
+          break;
+        case 'webp':
+          convertCommand = `convert "${tempTiffPath}" -quality ${options.quality} ${resizeParam} "${outputPath}"`;
+          break;
+        case 'tiff':
+          convertCommand = `convert "${tempTiffPath}" -compress jpeg -quality ${options.quality} ${resizeParam} "${outputPath}"`;
+          break;
+        case 'avif':
+          convertCommand = `convert "${tempTiffPath}" -quality ${options.quality} ${resizeParam} "${outputPath}"`;
+          break;
+          
+        default:
+          throw new Error(`Unsupported output format: ${outputFormat}`);
+      }
+      
+      console.log(`Running ImageMagick convert command: ${convertCommand}`);
+      await execAsync(convertCommand);
+      
+      // Verify output file was created
+      const outputExists = await fs.access(outputPath).then(() => true).catch(() => false);
+      console.log(`Output file created: ${outputExists}`);
+      
+      // Clean up temp TIFF file
+      try {
+        await fs.unlink(tempTiffPath);
+        console.log(`Cleaned up temporary TIFF file: ${tempTiffPath}`);
+      } catch (cleanupError) {
+        console.warn(`Failed to clean up temporary TIFF file ${tempTiffPath}:`, cleanupError);
+      }
+      
+      // Skip Sharp processing for RAW files since we handled everything
+      const stats = await fs.stat(outputPath);
+      return { success: true, outputSize: stats.size };
+      
+      // Clean up temp file after processing (we'll do this in finally block)
+    } else if (inputFormat === 'svg') {
+      // For SVG files, Sharp handles them natively
+      sharpInstance = sharp(inputPath, {
+        density: 300 // High DPI for SVG rasterization
+      });
+    } else if (inputFormat === 'tiff') {
+      // For TIFF files
+      sharpInstance = sharp(inputPath);
+    } else {
+      // Standard image formats (JPEG, PNG, WebP) - use Sharp
+      sharpInstance = sharp(inputPath);
+    }
+
+    // Apply resize if enabled
+    if (options.resize) {
+      const resizeOptions: any = {
+        width: options.width,
+        height: options.height,
+        fit: options.maintainAspect ? 'inside' : 'fill',
+        withoutEnlargement: true
+      };
+      sharpInstance = sharpInstance.resize(resizeOptions);
+    }
+    
+    // Apply output format conversion
+    switch (outputFormat) {
+      case 'jpeg':
+        await sharpInstance
+          .jpeg({ 
+            quality: options.quality,
+            progressive: true,
+            mozjpeg: true
+          })
+          .toFile(outputPath);
+        break;
+        
+      case 'png':
+        await sharpInstance
+          .png({ 
+            quality: options.quality,
+            compressionLevel: 8,
+            adaptiveFiltering: true
+          })
+          .toFile(outputPath);
+        break;
+        
+      case 'webp':
+        await sharpInstance
+          .webp({ 
+            quality: options.quality,
+            effort: 4
+          })
+          .toFile(outputPath);
+        break;
+        
+      case 'tiff':
+        await sharpInstance
+          .tiff({ 
+            compression: 'jpeg',
+            quality: options.quality,
+            predictor: 'horizontal'
+          })
+          .toFile(outputPath);
+        break;
+        
+      case 'avif':
+        await sharpInstance
+          .avif({ 
+            quality: 90,
+            effort: 4
+          })
+          .toFile(outputPath);
+        break;
+        
+      default:
+        throw new Error(`Unsupported output format: ${outputFormat}`);
+    }
+
+    const stats = await fs.stat(outputPath);
+    
+    return { success: true, outputSize: stats.size };
+
+  } catch (error) {
+    console.error(`Conversion error (${inputFormat} → ${outputFormat}):`, error);
+    throw new Error(`Failed to convert ${inputFormat} to ${outputFormat}: ${error instanceof Error ? error.message : 'Unknown error'}`);
+  }
+}
+
+// Background quality assessment function with timeout
+async function calculateQualityMetricsInBackground(
+  jobId: string, 
+  originalPath: string, 
+  compressedPath: string
+): Promise<void> {
+  const timeoutMs = 10000; // 10 second timeout
+  
+  try {
+    console.log(`Calculating quality metrics for job ${jobId} in background...`);
+    
+    // Race between quality calculation and timeout
+    const qualityMetrics = await Promise.race([
+      calculateQualityMetrics(originalPath, compressedPath),
+      new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Quality analysis timeout')), timeoutMs)
+      )
+    ]) as any;
+    
+    console.log(`Quality assessment completed - PSNR: ${qualityMetrics.psnr}, SSIM: ${qualityMetrics.ssim}%, Score: ${qualityMetrics.qualityScore}, Grade: ${qualityMetrics.qualityGrade}`);
+
+    // Update job with quality metrics
+    await storage.updateCompressionJob(jobId, {
+      psnr: Math.round(qualityMetrics.psnr * 100), // Store as integer with 2 decimal precision
+      ssim: Math.round(qualityMetrics.ssim * 100), // Store as integer percentage
+      qualityScore: qualityMetrics.qualityScore,
+      qualityGrade: qualityMetrics.qualityGrade,
+    });
+    
+    console.log(`Quality metrics updated for job ${jobId}`);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes('timeout')) {
+      console.warn(`Quality assessment timed out for job ${jobId} - skipping`);
+    } else {
+      console.error(`Quality assessment failed for job ${jobId}:`, error);
+    }
+    // Don't fail the job - quality assessment is optional
+  }
+}
