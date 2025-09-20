@@ -1,0 +1,43 @@
+Error while trying to use the following icon from the Manifest: https://277e5bf1-9b67-405a-ab94-816a93a86842-00-31384xxtk9d6l.worf.replit.dev/apple-touch-icon.png (Download error or resource isn't a valid image)Understand this error
+micro-jpeg-landing.tsx:306 Testing ZIP URL: /api/download-zip/68105301-8f4a-401c-95b6-1c702ebdaf02
+micro-jpeg-landing.tsx:311 ZIP URL test response: 200
+micro-jpeg-landing.tsx:306 Testing ZIP URL: /api/download-zip/68105301-8f4a-401c-95b6-1c702ebdaf02
+micro-jpeg-landing.tsx:310  HEAD https://277e5bf1-9b67-405a-ab94-816a93a86842-00-31384xxtk9d6l.worf.replit.dev/api/download-zip/68105301-8f4a-401c-95b6-1c702ebdaf02 404 (Not Found)
+saveToDropbox @ micro-jpeg-landing.tsx:310
+onClick @ micro-jpeg-landing.tsx:1025
+callCallback2 @ chunk-RPCDYKBN.js?v=564d67e4:3674
+invokeGuardedCallbackDev @ chunk-RPCDYKBN.js?v=564d67e4:3699
+invokeGuardedCallback @ chunk-RPCDYKBN.js?v=564d67e4:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-RPCDYKBN.js?v=564d67e4:3736
+executeDispatch @ chunk-RPCDYKBN.js?v=564d67e4:7014
+processDispatchQueueItemsInOrder @ chunk-RPCDYKBN.js?v=564d67e4:7034
+processDispatchQueue @ chunk-RPCDYKBN.js?v=564d67e4:7043
+dispatchEventsForPlugins @ chunk-RPCDYKBN.js?v=564d67e4:7051
+(anonymous) @ chunk-RPCDYKBN.js?v=564d67e4:7174
+batchedUpdates$1 @ chunk-RPCDYKBN.js?v=564d67e4:18913
+batchedUpdates @ chunk-RPCDYKBN.js?v=564d67e4:3579
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=564d67e4:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=564d67e4:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=564d67e4:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=564d67e4:5449Understand this error
+micro-jpeg-landing.tsx:311 ZIP URL test response: 404
+micro-jpeg-landing.tsx:347 ZIP URL test failed: Error: ZIP not available: 404
+    at saveToDropbox (micro-jpeg-landing.tsx:314:19)
+saveToDropbox @ micro-jpeg-landing.tsx:347
+await in saveToDropbox
+onClick @ micro-jpeg-landing.tsx:1025
+callCallback2 @ chunk-RPCDYKBN.js?v=564d67e4:3674
+invokeGuardedCallbackDev @ chunk-RPCDYKBN.js?v=564d67e4:3699
+invokeGuardedCallback @ chunk-RPCDYKBN.js?v=564d67e4:3733
+invokeGuardedCallbackAndCatchFirstError @ chunk-RPCDYKBN.js?v=564d67e4:3736
+executeDispatch @ chunk-RPCDYKBN.js?v=564d67e4:7014
+processDispatchQueueItemsInOrder @ chunk-RPCDYKBN.js?v=564d67e4:7034
+processDispatchQueue @ chunk-RPCDYKBN.js?v=564d67e4:7043
+dispatchEventsForPlugins @ chunk-RPCDYKBN.js?v=564d67e4:7051
+(anonymous) @ chunk-RPCDYKBN.js?v=564d67e4:7174
+batchedUpdates$1 @ chunk-RPCDYKBN.js?v=564d67e4:18913
+batchedUpdates @ chunk-RPCDYKBN.js?v=564d67e4:3579
+dispatchEventForPluginEventSystem @ chunk-RPCDYKBN.js?v=564d67e4:7173
+dispatchEventWithEnableCapturePhaseSelectiveHydrationWithoutDiscreteEventReplay @ chunk-RPCDYKBN.js?v=564d67e4:5478
+dispatchEvent @ chunk-RPCDYKBN.js?v=564d67e4:5472
+dispatchDiscreteEvent @ chunk-RPCDYKBN.js?v=564d67e4:5449Understand this error
